@@ -142,3 +142,4 @@ data/*.xml
 data/*.csv
 bert*
 .vscode
+*.csv
