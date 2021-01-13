@@ -18,7 +18,7 @@ class IOStage():
 class LoadXMLFileStage(IOStage):
 
     def __init__(self, filepath, n_revisions):
-        self.filepath = filepath
+        super().__init__(filepath)
         self.n_revisions = n_revisions
 
     def truncate_generator(self, generator, first_n):
@@ -51,13 +51,14 @@ class LoadXMLFileStage(IOStage):
 class SaveIterableToCSVStage(IOStage):
 
     def __init__(self, filepath, seperator='\t'):
-        self.filepath = filepath
+        super().__init__(filepath)
         self.seperator = seperator
 
     def log_statistics(self, dataframe):
         logging.info(f'Length of saved file: {dataframe.shape[0]}')
 
     def apply(self, collection):
+
         dataframe = pd.DataFrame(collection)
         self.log_statistics(dataframe)
 
@@ -65,3 +66,39 @@ class SaveIterableToCSVStage(IOStage):
         logging.info(f'Saved to {self.filepath}')
 
         return True
+
+
+class LoadCSVStage(IOStage):
+
+    def __init__(self,
+                 filepath,
+                 seperator='\t',
+                 select_columns=None,
+                 return_type=None):
+        super().__init__(filepath)
+        self.seperator = seperator
+        self.select_columns = select_columns
+        self.return_type = return_type
+
+    def log_statistics(self, dataframe):
+        logging.info(f'Loaded file from {self.filepath}')
+        logging.info(f'Length of loaded file: {dataframe.shape[0]}')
+
+    def apply(self, collection):
+        dataframe = pd.read_csv(self.filepath, sep=self.seperator)
+        self.log_statistics(dataframe)
+
+        if isinstance(self.select_columns, str):
+            self.select_columns = [self.select_columns]
+
+        if self.select_columns:
+            dataframe = dataframe[self.select_columns]
+
+        if (self.select_columns and
+                self.return_type == 'list_of_dicts'):
+            return dataframe[self.select_columns].to_dict('records')
+
+        if self.return_type == 'list':
+            return dataframe.tolist()
+
+        return dataframe
