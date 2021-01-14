@@ -1,26 +1,15 @@
 #!/usr/bin/env python3
 import math
 import re
-# import random
 import logging
-# from itertools import groupby
 from collections import Counter
 
-# from spellchecker import SpellChecker
-
-# from autocorrect import spell
+import numpy as np
 from simplediff import diff
 import Levenshtein
-from nltk import sent_tokenize, word_tokenize
-
-from src.text_processing import (
-    apply_text_sanitation,
-    apply_bert_tokenization
-)
+from nltk import word_tokenize
 
 logging.basicConfig(level='INFO')
-
-# TODO: refactor...
 
 
 def calculate_bleu_score(hyp, ref):
@@ -53,8 +42,6 @@ def calculate_bleu_score(hyp, ref):
     bleu = math.exp(min([0, 1 - float(r) / c]) + log_bleu_prec)
 
     return 100 * bleu
-
-# TODO: refactor...
 
 
 def find_matches(a_list, b_list, delta=3):
@@ -108,25 +95,22 @@ def find_matches(a_list, b_list, delta=3):
 #     return False
 
 
-def get_token_labels(s_diff):
-    tok_labels = []
-    for tag, chunk in s_diff:
+def get_token_labels(token_diff):
+    token_labels = []
+    for tag, chunk in token_diff:
         if tag == '=':
-            tok_labels += [0] * len(chunk)
+            token_labels += [0] * len(chunk)
 
         elif tag == '-':
-            tok_labels += [1] * len(chunk)
+            token_labels += [1] * len(chunk)
 
-        else:
-            pass
-
-    return tok_labels
+    return token_labels
 
 
-def is_single_word_edit(d):
+def is_single_word_edit(word_diff):
     """ is this diff good for the final generation dataset """
-    pre_chunks = [chunk for tag, chunk in d if tag == '-']
-    post_chunks = [chunk for tag, chunk in d if tag == '+']
+    pre_chunks = [chunk for tag, chunk in word_diff if tag == '-']
+    post_chunks = [chunk for tag, chunk in word_diff if tag == '+']
 
     # a single word on the pre side
     if sum([len(chunk) for chunk in pre_chunks]) != 1:
@@ -141,221 +125,368 @@ def is_single_word_edit(d):
         return False
 
     # post language chunk is directly after the pre chunk
-    prei = next((i for i, x in enumerate(d) if x[0] == '-'))
-    if prei < len(d) - 1 and d[prei + 1][0] == '+':
+    prei = next((i for i, x in enumerate(word_diff) if x[0] == '-'))
+    if prei < len(word_diff) - 1 and word_diff[prei + 1][0] == '+':
         return True
 
 # TODO: refactor to pipeline...
 
 
-def should_keep(
-        prior_raw,
-        prior_tokens,
-        post_raw,
-        post_tokens,
-        bleu_score,
-        revision_id):
+def meets_exact_match_criteria(bleu_score, prior, post):
+    if (bleu_score == 100 or prior == post):
+        return True
+    return False
 
-    # KEEP -- exact match
-    if bleu_score == 100 or prior_raw == post_raw:
-        length_prior = len(prior_tokens.split())
-        return True, None, [0 for _ in range(length_prior)]
 
-    # clearly not a match
-    if bleu_score < 15.0:
-        # CTR_LOW_BLEU += 1
-        logging.info(f'Low BLEU: {bleu_score}')
-        return False, None, None
+def passes_min_bleu_criteria(bleu_score, min_score=15.0):
+    if bleu_score >= min_score:
+        return True
+    return False
 
-    # too close
-    levenshtein_distance = Levenshtein.distance(
-        prior_tokens,
-        post_tokens)
 
-    if levenshtein_distance < 4:
-        # CTR_LOW_LEVEN += 1
-        logging.info(f'Low Levenstein: {levenshtein_distance}')
-        return False, None, None
+def passes_min_levenshtein_distance_criteria(distance):
+    if distance >= 4:
+        return True
+    return False
 
-    token_diff = diff(
-        prior_tokens.split(),
-        post_tokens.split()
-    )
 
-    token_labels = get_token_labels(token_diff)
-    assert len(token_labels) == len(prior_tokens.split())
-
+def passes_not_only_punctuation_criteria(token_diff):
     changed_text = ''.join(
         [''.join(chunk) for tag, chunk in token_diff if tag != '=']
     )
 
-    if not re.search('[a-z]', changed_text):
-        # CTR_ONLY_PUNC_CHANGED += 1
-        logging.info('Only punctuation changed')
-        return False, None, None
-
-    # too dissimilar -- less than half of tokens shared
-    tok_nums = [int(x) for x in token_labels]
-    if (sum(tok_nums) * 1.0 / len(tok_nums)) > 0.5:
-        # CTR_TOO_MANY_1_TOKS += 1
-        logging.info('Too dissimilar -- less than half of toks shared')
-        return False, None, None
-
-    # edit was just fixing a spelling error
-    word_diff = diff(
-        word_tokenize(prior_raw),
-        word_tokenize(post_raw)
-    )
-
-    # if is_spelling_diff(word_diff):
-    #     CTR_SPELLING += 1
-    #     return False, None, None
-
-    # some simple filtering to get out the chemistry "neutral" edits
-    if (' molecules' in prior_raw or
-        ' ions' in prior_raw or
-        ' ionic' in prior_raw or
-            ' atoms' in prior_raw):
-        # CTR_CHEMISTRY += 1
-        logging.info('Chemistry "neutral" edits')
-        return False, None, None
-
-    # # use enchant to make sure example has enough normal words
-    # prior_words = prior_words.translate(str.maketrans(
-        # '', '', string.punctuation)).split()
-    # n_words = sum(1 if d.check(w) else 0 for w in pre_words)
-    # if len(prior_words) == 0 or (float(n_words) / len(prior_words)) < 0.5:
-    #     return False, None, None
-
-    # see if this is a "single word" edit,
-    # where a single word was replaced with 0+ words
-    single_word_edit = is_single_word_edit(word_diff)
-
-    return True, single_word_edit, token_labels
+    if re.search('[a-z]', changed_text):
+        return True
+    return False
 
 
-def apply_revision_processing(revision):
+def passes_min_similarity_criteria(token_labels, min_proportion=0.5):
+    token_labels = list(map(int, token_labels))
+    proportion_of_changed_tokens = (
+        sum(token_labels) * 1.0 / len(token_labels))
+    if proportion_of_changed_tokens <= min_proportion:
+        return True
+    return False
 
-    # revision_id, prior, post, prior_deleted, post_added = revision
-    revision_id = revision['revision_id']
-    prior = revision['prior']
-    post = revision['post']
-    prior_deleted = revision['prior_deleted']
-    post_added = revision['post_added']
 
-    # empty revision
-    if not prior or not post:
-        # CTR_EMPTY_REV += 1
-        logging.info('Empty revision')
-        # return None
+def apply_matching_rules(row):
 
-    if (prior_deleted != ['no_deleted_chunks'] or
-            post_added != ['no_added_chunks']):
-        # CTR_NON_EDIT_CHUNKS += 1
-        logging.info('Non-edited chunks')
+    prior_sentence_raw = row['prior_sentences_raw']
+    post_sentence_raw = row['post_sentences_raw']
+    prior_sentence_tokens = row['prior_sentences_tokens']
+    post_sentence_tokens = row['post_sentences_tokens']
+    revision_id = row['revision_id']
 
-    # logging.info('revision_id: ', revision_id)
-    # logging.info('prior1: ', prior)
+    matches = find_matches(
+        prior_sentence_tokens,
+        post_sentence_tokens)
 
-    # unicode
-    if isinstance(prior[0], bytes):
-        prior = [x.decode() for x in prior]
-
-    if isinstance(post[0], bytes):
-        post = [x.decode() for x in post]
-
-    # multiple edits
-    if len(prior) > 1 or len(post) > 1:
-        # CTR_MULTIPLE_EDITS += 1
-        logging.info('Multiple edits')
-
-    prior_text = apply_text_sanitation(prior)
-    post_text = apply_text_sanitation(post)
-
-    logging.info('prior_text: ', prior_text)
-    logging.info('post_text: ', post_text)
-
-    # failed cleaning
-    if not prior_text or not post_text:
-        # CTR_FAILED_CLEANING += 1
-        logging.info('Failed cleaning')
-
-    prior_sentence_raw = sent_tokenize(prior_text)
-    post_sentence_raw = sent_tokenize(post_text)
-
-    prior_sentence_raw = \
-        [s.replace("'", '').strip() for s in prior_sentence_raw]
-    post_sentence_raw = \
-        [s.replace("'", '').strip() for s in post_sentence_raw]
-
-    logging.debug('prior_sentence_raw: ', prior_sentence_raw)
-    logging.debug('post_sentence_raw: ', post_sentence_raw)
-
-    if len(prior_sentence_raw) != len(post_sentence_raw):
-        # CTR_EDIT_CHANGED_NUM_SENTS += 1
-        logging.info('Edit changed number of sentences')
-
-    prior_sentence_tokens = \
-        [apply_bert_tokenization(s) for s in prior_sentence_raw]
-    post_sentence_tokens = \
-        [apply_bert_tokenization(s) for s in post_sentence_raw]
-
-    logging.debug('prior_sentence_tokens: ', prior_sentence_tokens)
-    logging.debug('post_sentence_tokens: ', post_sentence_tokens)
-
-    matches = find_matches(prior_sentence_tokens, post_sentence_tokens)
-
-    # TODO: refactor later...
-    processed_revisions = []
+    corpus = []
     for i, j, bleu_score in matches:
 
-        # TODO: Rename function later...
-        keep, is_word_edit, token_labels = should_keep(
-            prior_raw=prior_sentence_raw[i],
-            prior_tokens=prior_sentence_tokens[i],
-            post_raw=post_sentence_raw[j],
-            post_tokens=post_sentence_tokens[j],
-            bleu_score=bleu_score,
-            revision_id=revision_id
-        )
+        # Index text and tokens
+        prior_raw = prior_sentence_raw[i]
+        prior_tokens = prior_sentence_tokens[i]
+        post_raw = post_sentence_raw[j]
+        post_tokens = post_sentence_tokens[j]
+
+        word_diff = diff(
+            word_tokenize(prior_raw),
+            word_tokenize(post_raw))
+
+        token_diff = diff(
+            prior_tokens.split(),
+            post_tokens.split())
+
+        l_distance = Levenshtein.distance(
+            prior_tokens,
+            post_tokens)
+
+        token_labels = get_token_labels(token_diff)
+
+        # TODO: Add spelling edit check as well
+
+        single_word_edit = is_single_word_edit(word_diff)
+
+        passes_min_bleu = \
+            passes_min_bleu_criteria(bleu_score=bleu_score)
+        passes_only_punctuation = \
+            passes_not_only_punctuation_criteria(token_diff=token_diff)
+        passes_min_levenshtein_distance = \
+            passes_min_levenshtein_distance_criteria(distance=l_distance)
+        passes_min_similarity = \
+            passes_min_similarity_criteria(token_labels=token_labels)
+
+        keep = False
+        is_word_edit = None
+        token_labels = None
+
+        # Exact match
+        if meets_exact_match_criteria(
+                bleu_score=bleu_score,
+                prior=prior_raw,
+                post=post_raw):
+            logging.info(f'Exact match: {revision_id}')
+            keep = True
+            is_word_edit = None
+            token_labels = token_labels
+
+        # Meets all criteria
+        elif (passes_min_bleu or
+              passes_only_punctuation or
+              passes_min_levenshtein_distance or
+                passes_min_similarity):
+            keep = True
+            is_word_edit = single_word_edit
+            token_labels = token_labels
 
         if not keep:
             logging.info(
-                f'Not keeping: revision_id={revision_id}')
+                f'Discarding keeping: revision_id={revision_id} index={i}')
             continue
 
-        length_ratio = \
-            len(prior_sentence_raw[i]) * 1.0 / len(post_sentence_raw[j])
-
-        # TODO: Change to dict later...
-        processed_revisions.append(
+        corpus.append(
             {
                 'revision_id': revision_id,
                 'bleu_score': bleu_score,
                 'is_word_edit': is_word_edit,
                 'token_labels': token_labels,
-                'length_ratio': length_ratio,
-                'prior_sentence_raw': prior_sentence_raw[i],
-                'prior_sentence_tokens': prior_sentence_tokens[i],
-                'post_sentence_raw': post_sentence_raw[j],
-                'post_sentence_tokens': post_sentence_tokens[j]
+                'prior_sentence_raw': prior_raw,
+                'prior_sentence_tokens': prior_tokens,
+                'post_sentence_raw': post_raw,
+                'post_sentence_tokens': post_tokens
             }
         )
 
-    # only take revisions where a single sentence was changed
-    # if sum([sum(x[-1]) > 0 for x in rev_examples]) != 1:
-    #     CTR_INVALID_NUM_CHANGED_SENTS += \
-    #   len([x for x in rev_examples if sum(x[-1]) > 0])
-    #     continue
+    return corpus
 
-    # ignore the revision if duplicates got in the mix somehow
-    # revision_prior = [x[0] for x in processed_revisions]
-    # revision_post = [x[2] for x in processed_revisions]
 
-    # if (len(revision_prior) != len(set(revision_prior)) or
-    #         len(revision_post) != len(set(revision_post))):
-    #     # CTR_DUPS += len([x for x in rev_examples if sum(x[-1]) > 0])
-    #     logging.info('Duplicate')
-    #     # return None
+class RowDeduplicationStage():
+    """
+    De-duplicates iterable given fields to use as unique
+    concatenated identifier.
+    """
 
-    return processed_revisions
+    def __init__(self,
+                 deduplication_fields):
+        self.deduplication_fields = deduplication_fields
+
+    def create_unique_row_identifier(self, row, fields):
+        return ' '.join(
+            row[f] for f in fields
+        )
+
+    def apply(self, collection):
+
+        unique_rows = set()
+        unique_collection = []
+        for row in collection:
+
+            unique_row_identifier = \
+                self.create_unique_row_identifier(
+                    row=row,
+                    fields=self.deduplication_fields)
+
+            if unique_row_identifier not in unique_rows:
+                # Store unique row in collection
+                unique_collection.append(row)
+                # Update seen, unique rows
+                unique_rows.add(unique_row_identifier)
+
+        return unique_collection
+
+
+class FilterOnTextLengthStage():
+    """
+    Filter examples to only contain those in 95th
+    percentile with text length.
+    """
+
+    def __init__(self,
+                 field_a,
+                 field_b):
+        self.field_a = field_a
+        self.field_b = field_b
+
+    def calculate_text_length_statistics(self, collection):
+        length_ratios = []
+        for row in collection:
+
+            # TODO: why does original filter by word edit??...
+            # if row['is_word_edit']:
+
+            # TODO: avoid double calculation of text length...
+            # Performance reasons...
+            length_ratios.append(
+                self.calculate_text_length_ratio(
+                    text_a=row[self.field_a],
+                    text_b=row[self.field_b]
+                )
+            )
+
+        mu = np.mean(length_ratios)
+        sd = np.std(length_ratios)
+
+        return mu, sd
+
+    def passes_length_criteria(self, x, mu, sd):
+        greater_than_upper_bound = (x > mu + 2.0 * sd)
+        lower_than_lower_bound = (x < mu - 2.0 * sd)
+        if not (greater_than_upper_bound or lower_than_lower_bound):
+            return True
+        return False
+
+    def calculate_text_length_ratio(self, text_a, text_b):
+        return len(text_a) * 1.0 / len(text_b)
+
+    def apply(self, collection):
+
+        mu, sd = \
+            self.calculate_text_length_statistics(
+                collection=collection)
+
+        new_collection = []
+        for row in collection:
+
+            # TODO: avoid double calculation of text length...
+            # Performance reasons...
+            length_ratio = \
+                self.calculate_text_length_ratio(
+                    text_a=row[self.field_a],
+                    text_b=row[self.field_b])
+
+            if self.passes_length_criteria(length_ratio, mu, sd):
+                new_collection.append(row)
+
+        return new_collection
+
+# Legacy code...
+
+# def apply_revision_processing(revision):
+
+#     # revision_id, prior, post, prior_deleted, post_added = revision
+#     revision_id = revision['revision_id']
+#     prior = revision['prior']
+#     post = revision['post']
+#     prior_deleted = revision['prior_deleted']
+#     post_added = revision['post_added']
+
+#     # empty revision
+#     if not prior or not post:
+#         # CTR_EMPTY_REV += 1
+#         logging.info('Empty revision')
+#         # return None
+
+#     if (prior_deleted != ['no_deleted_chunks'] or
+#             post_added != ['no_added_chunks']):
+#         # CTR_NON_EDIT_CHUNKS += 1
+#         logging.info('Non-edited chunks')
+
+#     # logging.debug('revision_id: ', revision_id)
+#     # logging.debug('prior1: ', prior)
+
+#     # unicode
+#     if isinstance(prior[0], bytes):
+#         prior = [x.decode() for x in prior]
+
+#     if isinstance(post[0], bytes):
+#         post = [x.decode() for x in post]
+
+#     # multiple edits
+#     if len(prior) > 1 or len(post) > 1:
+#         # CTR_MULTIPLE_EDITS += 1
+#         logging.info('Multiple edits')
+
+#     prior_text = apply_text_sanitation(prior)
+#     post_text = apply_text_sanitation(post)
+
+#     logging.debug('prior_text: ', prior_text)
+#     logging.debug('post_text: ', post_text)
+
+#     # failed cleaning
+#     if not prior_text or not post_text:
+#         # CTR_FAILED_CLEANING += 1
+#         logging.info('Failed cleaning')
+
+#     prior_sentence_raw = apply_sentence_tokenize(prior_text)
+#     post_sentence_raw = apply_sentence_tokenize(post_text)
+
+#     # prior_sentence_raw = sent_tokenize(prior_text)
+#     # post_sentence_raw = sent_tokenize(post_text)
+
+#     # prior_sentence_raw = \
+#     #     [s.replace("'", '').strip() for s in prior_sentence_raw]
+#     # post_sentence_raw = \
+#     #     [s.replace("'", '').strip() for s in post_sentence_raw]
+
+#     logging.debug('prior_sentence_raw: ', prior_sentence_raw)
+#     logging.debug('post_sentence_raw: ', post_sentence_raw)
+
+#     if len(prior_sentence_raw) != len(post_sentence_raw):
+#         # CTR_EDIT_CHANGED_NUM_SENTS += 1
+#         logging.info('Edit changed number of sentences')
+
+#     prior_sentence_tokens = \
+#         list(map(apply_bert_tokenization, prior_sentence_raw))
+#     post_sentence_tokens = \
+#         list(map(apply_bert_tokenization, post_sentence_raw))
+
+#     logging.debug('prior_sentence_tokens: ', prior_sentence_tokens)
+#     logging.debug('post_sentence_tokens: ', post_sentence_tokens)
+
+#     matches = find_matches(prior_sentence_tokens, post_sentence_tokens)
+
+#     # TODO: refactor later...
+#     processed_revisions = []
+#     for i, j, bleu_score in matches:
+
+#         # TODO: Rename function later...
+#         keep, is_word_edit, token_labels = should_keep(
+#             prior_raw=prior_sentence_raw[i],
+#             prior_tokens=prior_sentence_tokens[i],
+#             post_raw=post_sentence_raw[j],
+#             post_tokens=post_sentence_tokens[j],
+#             bleu_score=bleu_score,
+#             revision_id=revision_id
+#         )
+
+#         if not keep:
+#             logging.info(
+#                 f'Not keeping: revision_id={revision_id}')
+#             continue
+
+#         length_ratio = \
+#             len(prior_sentence_raw[i]) * 1.0 / len(post_sentence_raw[j])
+
+#         # TODO: Change to dict later...
+#         processed_revisions.append(
+#             {
+#                 'revision_id': revision_id,
+#                 'bleu_score': bleu_score,
+#                 'is_word_edit': is_word_edit,
+#                 'token_labels': token_labels,
+#                 'length_ratio': length_ratio,
+#                 'prior_sentence_raw': prior_sentence_raw[i],
+#                 'prior_sentence_tokens': prior_sentence_tokens[i],
+#                 'post_sentence_raw': post_sentence_raw[j],
+#                 'post_sentence_tokens': post_sentence_tokens[j]
+#             }
+#         )
+
+#     # only take revisions where a single sentence was changed
+#     # if sum([sum(x[-1]) > 0 for x in rev_examples]) != 1:
+#     #     CTR_INVALID_NUM_CHANGED_SENTS += \
+#     #   len([x for x in rev_examples if sum(x[-1]) > 0])
+#     #     continue
+
+#     # ignore the revision if duplicates got in the mix somehow
+#     # revision_prior = [x[0] for x in processed_revisions]
+#     # revision_post = [x[2] for x in processed_revisions]
+
+#     # if (len(revision_prior) != len(set(revision_prior)) or
+#     #         len(revision_post) != len(set(revision_post))):
+#     #     # CTR_DUPS += len([x for x in rev_examples if sum(x[-1]) > 0])
+#     #     logging.info('Duplicate')
+#     #     # return None
+
+#     return processed_revisions

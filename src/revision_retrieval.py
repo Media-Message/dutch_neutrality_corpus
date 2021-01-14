@@ -6,6 +6,9 @@ from urllib.request import urlopen
 
 from bs4 import BeautifulSoup
 
+# TODO: refactor...
+
+
 # TODO: Parameterise language later...
 DUTCH_WIKIPEDIA_REVISION_URL_TEMPLATE = \
     'https://nl.wikipedia.org/wiki/?diff={revision_id}'
@@ -14,8 +17,6 @@ DUTCH_WIKIPEDIA_REVISION_URL_TEMPLATE = \
 def get_wikipedia_revision_url(revision_id):
     return DUTCH_WIKIPEDIA_REVISION_URL_TEMPLATE.format(
         revision_id=revision_id)
-
-# TODO: refactor...
 
 
 def html2diff(html):
@@ -87,7 +88,9 @@ def wiki_text_clean(text):
     return text
 
 
-def retrieve_single_revision(revision_id):
+def retrieve_single_revision(row):
+    revision_id = row['revision_id']
+
     logging.info(f'Processing revision_id={revision_id}')
 
     url = get_wikipedia_revision_url(revision_id=revision_id)

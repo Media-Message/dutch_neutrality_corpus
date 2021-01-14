@@ -1,7 +1,6 @@
+import json
 import logging
 import xml.etree.cElementTree as ET
-
-import pandas as pd
 
 logging.basicConfig(level='INFO')
 
@@ -48,57 +47,53 @@ class LoadXMLFileStage(IOStage):
         return context
 
 
-class SaveIterableToCSVStage(IOStage):
+class SaveIterableToJSONStage(IOStage):
 
-    def __init__(self, filepath, seperator='\t'):
+    def __init__(self, filepath):
         super().__init__(filepath)
-        self.seperator = seperator
 
-    def log_statistics(self, dataframe):
-        logging.info(f'Length of saved file: {dataframe.shape[0]}')
+    def log_statistics(self, collection):
+        logging.info(f'Length of saved file: {len(collection)}')
 
     def apply(self, collection):
+        self.log_statistics(collection)
 
-        dataframe = pd.DataFrame(collection)
-        self.log_statistics(dataframe)
+        with open(self.filepath, 'w') as outfile:
+            json.dump(collection, outfile)
 
-        dataframe.to_csv(self.filepath, sep=self.seperator)
         logging.info(f'Saved to {self.filepath}')
-
         return True
 
 
-class LoadCSVStage(IOStage):
+class LoadJSONStage(IOStage):
 
     def __init__(self,
                  filepath,
-                 seperator='\t',
-                 select_columns=None,
-                 return_type=None):
+                 select_fields=None):
         super().__init__(filepath)
-        self.seperator = seperator
-        self.select_columns = select_columns
-        self.return_type = return_type
+        self.select_fields = select_fields
 
-    def log_statistics(self, dataframe):
-        logging.info(f'Loaded file from {self.filepath}')
-        logging.info(f'Length of loaded file: {dataframe.shape[0]}')
+    def filter_fields(self, collection, fields):
+
+        if isinstance(fields, str):
+            fields = [fields]
+
+        new_collection = []
+        for c in collection:
+            new_collection.append(
+                {k: v for k, v in c.items() if k in fields}
+            )
+        return new_collection
 
     def apply(self, collection):
-        dataframe = pd.read_csv(self.filepath, sep=self.seperator)
-        self.log_statistics(dataframe)
 
-        if isinstance(self.select_columns, str):
-            self.select_columns = [self.select_columns]
+        with open(self.filepath) as json_file:
+            collection = json.load(json_file)
 
-        if self.select_columns:
-            dataframe = dataframe[self.select_columns]
+        if self.select_fields:
+            return self.filter_fields(
+                collection=collection,
+                fields=self.select_fields
+            )
 
-        if (self.select_columns and
-                self.return_type == 'list_of_dicts'):
-            return dataframe[self.select_columns].to_dict('records')
-
-        if self.return_type == 'list':
-            return dataframe.tolist()
-
-        return dataframe
+        return collection

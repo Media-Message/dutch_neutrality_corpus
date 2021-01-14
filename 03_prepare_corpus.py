@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 import logging
 import argparse
-import multiprocessing
 
-import pandas as pd
-
-from src.pipeline import Pipeline, Stage
+from src.pipeline import (
+    Pipeline,
+    Stage)
+from src.text_processing import (
+    apply_text_sanitation,
+    apply_sentence_tokenization,
+    apply_bert_tokenization
+)
 from src.revision_processing import (
-    apply_revision_processing
+    apply_matching_rules,
+    RowDeduplicationStage,
+    FilterOnTextLengthStage
 )
 from src.utils import (
-    LoadCSVStage,
-    SaveIterableToCSVStage
+    LoadJSONStage,
+    SaveIterableToJSONStage
 )
 
 
@@ -24,64 +30,136 @@ if __name__ == '__main__':
         description='Extract revision IDs from wiki meta history dump.')
     parser.add_argument('--revisions-text-file',
                         type=str,
-                        # nargs=1,
                         required=True,
                         help='filepath to revision text file')
     parser.add_argument('--output-file',
                         type=str,
                         required=False,
-                        default='revisions_processed_text.csv',
+                        default='data/revisions_processed_text.json',
                         help='filepath for processed text')
     parser.add_argument('--model-cache',
                         type=str,
                         required=False,
                         default='bert-base-uncased-model',
                         help='filepath for cached BERT model')
-    parser.add_argument('--output-prefix',
-                        type=str,
-                        required=False,
-                        default='revisions-data',
-                        help='filepath prefix for output files')
 
     args = parser.parse_args()
     revisions_text_file = str(args.revisions_text_file)
     output_file = str(args.output_file)
     model_cache = str(args.model_cache)
-    output_prefix = str(args.output_prefix)
 
-    columns = ['revision_id', 'prior', 'post', 'prior_deleted', 'post_added']
     stages = [
-        LoadCSVStage(
+        LoadJSONStage(
             filepath=revisions_text_file,
-            select_columns=columns,
-            return_type='list_of_dicts'
+            select_fields=[
+                'revision_id',
+                'prior',
+                'post',
+                'prior_deleted',
+                'post_added'
+            ]
         ),
-        Stage(func=apply_revision_processing),
-        SaveIterableToCSVStage(filepath=output_prefix)
+        # TODO: Add first tier of filter for revisions
+        # Pipeline(
+        #     stages=[
+        #         Stage(
+        #             func=apply_text_sanitation,
+        #             func_kwargs={
+        #                 'apply_to_field': 'prior',
+        #                 'new_field': 'prior_text'
+        #             },
+        #             accumulate=True
+        #         ),
+        #         Stage(
+        #             func=apply_text_sanitation,
+        #             func_kwargs={
+        #                 'apply_to_field': 'prior',
+        #                 'new_field': 'prior_text'
+        #             },
+        #             accumulate=True
+        #         )
+        #     ]),
+        # Text processing for prior text
+        Pipeline(
+            stages=[
+                Stage(
+                    func=apply_text_sanitation,
+                    func_kwargs={
+                        'apply_to_field': 'prior',
+                        'new_field': 'prior_text'
+                    },
+                    accumulate=True
+                ),
+                Stage(
+                    func=apply_sentence_tokenization,
+                    func_kwargs={
+                        'apply_to_field': 'prior_text',
+                        'new_field': 'prior_sentences_raw'
+                    },
+                    accumulate=True
+                ),
+                Stage(
+                    func=apply_bert_tokenization,
+                    func_kwargs={
+                        'apply_to_field': 'prior_sentences_raw',
+                        'new_field': 'prior_sentences_tokens'
+                    },
+                    accumulate=True
+                )
+            ]),
+        # Text processing for posterior text
+        Pipeline(
+            stages=[
+                Stage(
+                    func=apply_text_sanitation,
+                    func_kwargs={
+                        'apply_to_field': 'post',
+                        'new_field': 'post_text'
+                    },
+                    accumulate=True
+                ),
+                Stage(
+                    func=apply_sentence_tokenization,
+                    func_kwargs={
+                        'apply_to_field': 'post_text',
+                        'new_field': 'post_sentences_raw'
+                    },
+                    accumulate=True
+                ),
+                Stage(
+                    func=apply_bert_tokenization,
+                    func_kwargs={
+                        'apply_to_field': 'post_sentences_raw',
+                        'new_field': 'post_sentences_tokens'
+                    },
+                    accumulate=True
+                )
+            ]),
+        # Filtering rules
+        Pipeline(
+            stages=[
+                Stage(func=apply_matching_rules, flatten=True),
+                RowDeduplicationStage(
+                    deduplication_fields=[
+                        'revision_id',
+                        'prior_sentence_raw',
+                        'post_sentence_raw'
+                    ]),
+                FilterOnTextLengthStage(
+                    field_a='prior_sentence_raw',
+                    field_b='post_sentence_raw'
+                )
+            ]),
+        SaveIterableToJSONStage(filepath=output_file)
     ]
 
     pipeline = Pipeline(stages=stages)
-    results = pipeline.run(collection=None)
+    results = pipeline.apply(collection=None)
 
-    # print(list(results))
-    # # De-duplicate
-    # seen_examples = set()
-    # tmp = []
-    # for ex in results:
-    #     if ex['out_row'] in seen_examples:
-    #         continue
-    #     else:
-    #         tmp += [ex]
-    #         seen_examples.add(ex['out_row'])
+    # TODO: ignore changes to nouns?
+    # print([d for d in list(results) if d['is_word_edit']])
 
-    # out = tmp
-
-    # # ratio thresholding
-    # ratios = [x['length_ratio'] for x in out if x['is_word_edit'] is not None]
-    # N = len(ratios) * 1.0
-    # mu = np.mean(ratios)
-    # sd = np.std(ratios)
-
+    # TODO: add writing to seperate files
     # print('WRITING...')
     # # write unbiased
     # f_unbiased = open(output_prefix + '.unbiased', 'w')
@@ -110,6 +188,7 @@ if __name__ == '__main__':
 
     # print('ctrs:')
 
+    # TODO: add logging of corpus statistics
     # print('CTR_EMPTY_REV', CTR_EMPTY_REV)
     # print('CTR_MULTIPLE_EDITS', CTR_MULTIPLE_EDITS)
     # print('CTR_FAILED_CLEANING', CTR_FAILED_CLEANING)

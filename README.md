@@ -16,19 +16,19 @@ export WIKI_DATA=nlwiki-20200901-stub-meta-history.xml
 Identify NPOV revisions using comments from dump:
 
 ``` BASH
-./01_identify_npov_revisions.py --meta-history-file data/nlwiki-20200901-stub-meta-history.xml --output-file data/revisions.csv --n_revisions 10000000
+./01_identify_npov_revisions.py --meta-history-file data/nlwiki-20200901-stub-meta-history.xml --output-file data/revision_comments.json --n_revisions 10000000
 ```
 
 Crawl Wikipedia to obtain the revisions:
 
 ``` BASH
-./02_retrieve_revisions.py --revision-file data/revisions.csv
+./02_retrieve_revisions.py --revision-file data/revision_texts.json
 ```
 
 Clean and prepare corpus:
 
 ``` BASH
-./03_prepare_corpus.py --revisions-text-file data/revision_texts.csv
+./03_prepare_corpus.py --revisions-text-file data/revision_texts.json
 ```
 
 Multiprocessing Mac

@@ -7,8 +7,8 @@ from src.revision_retrieval import (
     retrieve_single_revision
 )
 from src.utils import (
-    LoadCSVStage,
-    SaveIterableToCSVStage
+    LoadJSONStage,
+    SaveIterableToJSONStage
 )
 
 logging.basicConfig(level='INFO')
@@ -32,14 +32,13 @@ if __name__ == '__main__':
     output_file = str(args.output_file)
 
     stages = [
-        LoadCSVStage(
+        LoadJSONStage(
             filepath=revision_file,
-            select_columns='revision_id',
-            return_type='list'
+            select_fields=['revision_id'],
         ),
-        Stage(func=retrieve_single_revision),
-        SaveIterableToCSVStage(filepath=output_file)
+        Stage(func=retrieve_single_revision, filter_collection=True),
+        SaveIterableToJSONStage(filepath=output_file)
     ]
 
     pipeline = Pipeline(stages=stages)
-    results = pipeline.run(collection=None)
+    results = pipeline.apply(collection=None)

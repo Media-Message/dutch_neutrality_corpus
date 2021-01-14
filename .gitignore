@@ -143,3 +143,4 @@ data/*.csv
 bert*
 .vscode
 *.csv
+*.json
