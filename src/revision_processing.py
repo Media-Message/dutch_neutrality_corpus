@@ -312,7 +312,7 @@ class FilterOnTextLengthStage():
         length_ratios = []
         for row in collection:
 
-            # TODO: why does original filter by word edit??...
+            # TODO: why does original filter use word edit??...
             # if row['is_word_edit']:
 
             # TODO: avoid double calculation of text length...
@@ -359,6 +359,66 @@ class FilterOnTextLengthStage():
                 new_collection.append(row)
 
         return new_collection
+
+
+def meets_non_empty_revision_criteria(prior, post):
+    if (not prior or not post):
+        return False
+    return True
+
+
+def meets_deleted_and_added_criteria(prior_deleted, post_added):
+    if (prior_deleted != ['no_deleted_chunks'] or
+            post_added != ['no_added_chunks']):
+        return False
+    return True
+
+
+def meets_single_edit_criteria(prior, post):
+    if len(prior) > 1 or len(post) > 1:
+        return False
+    return True
+
+
+def filter_on_first_tier_rules(row,
+                               filter_non_empty=False,
+                               filter_deleted_and_added=False,
+                               filter_single_edit=False):
+    prior = row['prior']
+    post = row['post']
+    prior_deleted = row['prior_deleted']
+    post_added = row['post_added']
+
+    is_non_empty_revision = True
+    is_deleted_and_added = True
+    is_single_edit = True
+
+    if filter_non_empty:
+        is_non_empty_revision = \
+            meets_non_empty_revision_criteria(
+                prior=prior,
+                post=post)
+
+    # TODO: evaluate...
+    if filter_deleted_and_added:
+        is_deleted_and_added = \
+            meets_deleted_and_added_criteria(
+                prior_deleted=prior_deleted,
+                post_added=post_added)
+
+    # TODO: necessary for us?
+    if filter_single_edit:
+        is_single_edit = \
+            meets_single_edit_criteria(
+                prior=prior,
+                post=post)
+
+    if (is_non_empty_revision and
+        is_deleted_and_added and
+            is_single_edit):
+        return row
+
+    return {}
 
 # Legacy code...
 

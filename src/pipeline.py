@@ -31,8 +31,6 @@ class Stage():
 
     def flatten_results(self, results):
         """ Merge within stage """
-        # if not isinstance(results, list):
-        #     results = list(results)
         return (row for rows in results for row in rows)
 
     def apply(self, collection):
