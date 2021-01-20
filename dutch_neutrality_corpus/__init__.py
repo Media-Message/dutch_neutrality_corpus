@@ -51,11 +51,6 @@ def main():
     parser.add_argument('--n_revisions',
                         default=None,
                         help='max number of revisions for "identify"')
-    parser.add_argument('--model-cache',
-                        type=str,
-                        required=False,
-                        default='bert-base-uncased-model',
-                        help='filepath for cached BERT model')
 
     args = parser.parse_args()
     pipeline_name = str(args.pipeline_name)
