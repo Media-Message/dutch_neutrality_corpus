@@ -145,3 +145,6 @@ bert*
 .vscode
 *.csv
 *.json
+
+# Mac
+.DS_Store
