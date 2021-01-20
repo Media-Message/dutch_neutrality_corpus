@@ -2,13 +2,13 @@
 import argparse
 import logging
 
-from src.comment_filtering import apply_npov_identification
+from dutch_neutrality_corpus.comment_filtering import apply_npov_identification
 
-from src.utils import (
+from dutch_neutrality_corpus.utils import (
     LoadXMLFileStage,
     SaveIterableToJSONStage)
 
-from src.pipeline import Pipeline, Stage
+from dutch_neutrality_corpus.pipeline import Pipeline, Stage
 
 logging.basicConfig(level='INFO')
 

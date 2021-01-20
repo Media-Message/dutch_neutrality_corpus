@@ -2,21 +2,21 @@
 import logging
 import argparse
 
-from src.pipeline import (
+from dutch_neutrality_corpus.pipeline import (
     Pipeline,
     Stage)
-from src.text_processing import (
+from dutch_neutrality_corpus.text_processing import (
     apply_text_sanitation,
     apply_sentence_tokenization,
     apply_bert_tokenization
 )
-from src.revision_processing import (
+from dutch_neutrality_corpus.revision_processing import (
     filter_on_first_tier_rules,
     apply_matching_rules,
     RowDeduplicationStage,
     FilterOnTextLengthStage
 )
-from src.utils import (
+from dutch_neutrality_corpus.utils import (
     LoadJSONStage,
     SaveIterableToJSONStage
 )

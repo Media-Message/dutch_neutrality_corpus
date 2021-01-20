@@ -2,11 +2,11 @@
 import argparse
 import logging
 
-from src.pipeline import Pipeline, Stage
-from src.revision_retrieval import (
+from dutch_neutrality_corpus.pipeline import Pipeline, Stage
+from dutch_neutrality_corpus.revision_retrieval import (
     retrieve_single_revision
 )
-from src.utils import (
+from dutch_neutrality_corpus.utils import (
     LoadJSONStage,
     SaveIterableToJSONStage
 )

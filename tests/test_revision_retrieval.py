@@ -1,6 +1,6 @@
 import unittest
 
-from src.revision_retrieval import (
+from dutch_neutrality_corpus.revision_retrieval import (
     get_wikipedia_revision_url
 )
 

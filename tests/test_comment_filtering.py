@@ -1,6 +1,6 @@
 import unittest
 
-from src.comment_filtering import (
+from dutch_neutrality_corpus.comment_filtering import (
     strip_tag_name
 )
 
