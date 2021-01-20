@@ -140,6 +140,7 @@ cython_debug/
 # Local directories
 data/*.xml
 data/*.csv
+data/*.zip
 bert*
 .vscode
 *.csv
