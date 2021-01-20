@@ -45,7 +45,6 @@ psycopg2-binary==2.8.5
 ptyprocess==0.6.0
 py==1.10.0
 pycodestyle==2.6.0
-pycurl==7.43.0.5
 pyflakes==2.2.0
 Pygments==2.6.1
 pyparsing==2.4.7
@@ -63,11 +62,8 @@ requests==2.22.0
 s3transfer==0.3.3
 simplediff==1.0
 simplejson==3.11.1
-singer-python==5.8.1
--e git+git@github.com:NickLeoMartin/singer-selector.git@61d16d9ae2a5091ad1caf7d053b773c13ae04895#egg=singer_selector
 six==1.14.0
 soupsieve==2.1
-tap-persistiq==0.0.2
 toml==0.10.2
 torch==1.7.1
 tornado==6.0.4
