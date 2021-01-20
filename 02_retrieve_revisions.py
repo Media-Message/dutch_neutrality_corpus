@@ -17,7 +17,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
         description='Extract revision IDs from wiki meta history dump.')
-    parser.add_argument('--revision-file',
+    parser.add_argument('--input-file',
                         type=str,
                         # nargs=1,
                         required=True,
@@ -28,12 +28,12 @@ if __name__ == '__main__':
                         default='revision_texts.csv',
                         help='filepath for CSV with revision IDs and comments')
     args = parser.parse_args()
-    revision_file = str(args.revision_file)
+    input_file = str(args.input_file)
     output_file = str(args.output_file)
 
     stages = [
         LoadJSONStage(
-            filepath=revision_file,
+            filepath=input_file,
             select_fields=['revision_id'],
         ),
         Stage(func=retrieve_single_revision, filter_collection=True),

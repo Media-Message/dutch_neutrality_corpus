@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
         description='Extract revision IDs from wiki meta history dump.')
-    parser.add_argument('--revisions-text-file',
+    parser.add_argument('--input-file',
                         type=str,
                         required=True,
                         help='filepath to revision text file')
@@ -45,13 +45,13 @@ if __name__ == '__main__':
                         help='filepath for cached BERT model')
 
     args = parser.parse_args()
-    revisions_text_file = str(args.revisions_text_file)
+    input_file = str(args.input_file)
     output_file = str(args.output_file)
     model_cache = str(args.model_cache)
 
     stages = [
         LoadJSONStage(
-            filepath=revisions_text_file,
+            filepath=input_file,
             select_fields=[
                 'revision_id',
                 'prior',

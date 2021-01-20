@@ -16,9 +16,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
         description='Extract revision IDs from wiki meta history dump.')
-    parser.add_argument('--meta-history-file',
+    parser.add_argument('--input-file',
                         type=str,
-                        # nargs=1,
                         required=True,
                         help='filepath to wikipedia meta history XML file')
     parser.add_argument('--output-file',
@@ -31,13 +30,13 @@ if __name__ == '__main__':
                         help='max number of revisions to process')
 
     args = parser.parse_args()
-    meta_history_file = str(args.meta_history_file)
+    input_file = str(args.input_file)
     output_file = str(args.output_file)
     n_revisions = int(args.n_revisions)
 
     stages = [
         LoadXMLFileStage(
-            filepath=meta_history_file,
+            filepath=input_file,
             n_revisions=n_revisions
         ),
         Stage(func=apply_npov_identification, filter_collection=True),
