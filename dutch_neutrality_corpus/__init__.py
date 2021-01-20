@@ -56,9 +56,10 @@ def main():
     pipeline_name = str(args.pipeline_name)
     input_file = str(args.input_file)
     output_file = str(args.output_file)
-    n_revisions = int(args.n_revisions)
 
     if pipeline_name == 'identify':
+        n_revisions = int(args.n_revisions)
+
         stages = [
             LoadXMLFileStage(
                 filepath=input_file,
