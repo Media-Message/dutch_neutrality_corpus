@@ -24,19 +24,27 @@ python -m pip install -e .
 Identify NPOV revisions using comments from dump:
 
 ``` BASH
-dutch_neutrality_corpus --pipeline-name identify --input-file data/nlwiki-20200901-stub-meta-history.xml --output-file data/revision_comments.json --n_revisions 100000
+dutch_neutrality_corpus \
+    --pipeline-name identify \
+    --input-file data/nlwiki-20200901-stub-meta-history.xml \
+    --output-file data/revision_comments.json \
+    --n_revisions 100000
 ```
 
 Crawl Wikipedia to obtain the revisions:
 
 ``` BASH
-dutch_neutrality_corpus --pipeline-name retrieve --input-file data/revision_texts.json
+dutch_neutrality_corpus \
+    --pipeline-name retrieve \
+    --input-file data/revision_comments.json
 ```
 
 Clean and prepare corpus:
 
 ``` BASH
-dutch_neutrality_corpus --pipeline-name prepare --input-file data/revision_texts.json
+dutch_neutrality_corpus \
+    --pipeline-name prepare \
+    --input-file data/revision_texts.json
 ```
 
 Multiprocessing Mac
