@@ -9,7 +9,10 @@ from simplediff import diff
 import Levenshtein
 from nltk import word_tokenize
 
-logging.basicConfig(level='INFO')
+logging.basicConfig(
+    level='INFO',
+    format='%(asctime)s %(message)s',
+    filename='dwnc.log')
 
 
 def calculate_bleu_score(hyp, ref):
@@ -181,7 +184,7 @@ def apply_matching_rules(row):
         prior_sentence_tokens,
         post_sentence_tokens)
 
-    corpus = []
+    examples = []
     for i, j, bleu_score in matches:
 
         # Index text and tokens
@@ -245,7 +248,7 @@ def apply_matching_rules(row):
                 f'Discarding keeping: revision_id={revision_id} index={i}')
             continue
 
-        corpus.append(
+        examples.append(
             {
                 'revision_id': revision_id,
                 'bleu_score': bleu_score,
@@ -258,7 +261,7 @@ def apply_matching_rules(row):
             }
         )
 
-    return corpus
+    return examples
 
 
 class RowDeduplicationStage():
@@ -276,8 +279,8 @@ class RowDeduplicationStage():
             row[f] for f in fields
         )
 
+    # TODO: transform to generator...
     def apply(self, collection):
-
         unique_rows = set()
         unique_collection = []
         for row in collection:
@@ -339,6 +342,7 @@ class FilterOnTextLengthStage():
     def calculate_text_length_ratio(self, text_a, text_b):
         return len(text_a) * 1.0 / len(text_b)
 
+    # TODO: transform to generator...
     def apply(self, collection):
 
         mu, sd = \

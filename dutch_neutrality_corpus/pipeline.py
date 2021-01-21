@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-
+import logging
 import multiprocessing
 from functools import partial
+
+logging.basicConfig(
+    level='INFO',
+    format='%(asctime)s %(message)s',
+    filename='dwnc.log')
 
 
 class Stage():
@@ -34,6 +39,8 @@ class Stage():
         return (row for rows in results for row in rows)
 
     def apply(self, collection):
+        logging.info(f'Applying Stage(func={self.func.__name__})...')
+
         # Distributes work over cores
         pool = multiprocessing.Pool(self.n_workers)
 
@@ -55,7 +62,12 @@ class Stage():
         if self.filter_collection:
             results = filter(None, results)
 
-        return list(results)
+        # Invoke
+        results = list(results)
+
+        logging.info(f'Completed Stage(func={self.func.__name__})...')
+
+        return results
 
 
 class Pipeline():

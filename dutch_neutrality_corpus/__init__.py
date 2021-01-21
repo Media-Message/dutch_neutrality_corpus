@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import logging
 import argparse
 
@@ -28,7 +29,10 @@ from dutch_neutrality_corpus.utils import (
 )
 
 
-logging.basicConfig(level='INFO')
+logging.basicConfig(
+    level='INFO',
+    format='%(asctime)s %(message)s',
+    filename='dwnc.log')
 
 
 def main():
@@ -58,7 +62,7 @@ def main():
     output_file = str(args.output_file)
 
     if pipeline_name == 'identify':
-        n_revisions = int(args.n_revisions)
+        n_revisions = args.n_revisions
 
         stages = [
             LoadXMLFileStage(
@@ -180,3 +184,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    sys.exit()

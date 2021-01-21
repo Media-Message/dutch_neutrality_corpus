@@ -1,8 +1,13 @@
 import json
 import logging
+import multiprocessing
+from functools import partial
 import xml.etree.cElementTree as ET
 
-logging.basicConfig(level='INFO')
+logging.basicConfig(
+    level='INFO',
+    format='%(asctime)s %(message)s',
+    filename='dwnc.log')
 
 
 class IOStage():
@@ -21,10 +26,11 @@ class LoadXMLFileStage(IOStage):
         self.n_revisions = n_revisions
 
     def truncate_generator(self, generator, first_n):
-        return [generator.__next__() for _ in range(int(first_n))]
+        return (generator.__next__() for _ in range(int(first_n)))
 
     # TODO: replace 'collection' with nuisance parameter...
     def apply(self, collection):
+        logging.info(f'Loading {self.filepath}...')
 
         context = ET.iterparse(
             self.filepath,
@@ -44,6 +50,8 @@ class LoadXMLFileStage(IOStage):
                 generator=context,
                 first_n=self.n_revisions)
 
+        logging.info(f'Completed loading {self.filepath}')
+
         return context
 
 
@@ -58,10 +66,12 @@ class SaveIterableToJSONStage(IOStage):
     def apply(self, collection):
         self.log_statistics(collection)
 
+        logging.info(f'Saving {self.filepath}...')
+
         with open(self.filepath, 'w') as outfile:
             json.dump(collection, outfile)
 
-        logging.info(f'Saved to {self.filepath}')
+        logging.info(f'Save complete to {self.filepath}')
         return True
 
 
@@ -69,28 +79,40 @@ class LoadJSONStage(IOStage):
 
     def __init__(self,
                  filepath,
-                 select_fields=None):
+                 select_fields=None,
+                 n_workers=None):
         super().__init__(filepath)
         self.select_fields = select_fields
+        self.n_workers = n_workers
+
+    def filter_dict(self, item_dict, fields):
+        return {k: v for k, v in item_dict.items() if k in fields}
 
     def filter_fields(self, collection, fields):
 
         if isinstance(fields, str):
             fields = [fields]
 
-        new_collection = []
-        for c in collection:
-            new_collection.append(
-                {k: v for k, v in c.items() if k in fields}
-            )
-        return new_collection
+        pool = multiprocessing.Pool(self.n_workers)
+
+        kwargs = {'fields': fields}
+        filter_func = partial(
+                self.filter_dict,
+                **kwargs)
+
+        return pool.imap(filter_func, collection)
 
     def apply(self, collection):
+
+        logging.info(f'Loading {self.filepath}...')
 
         with open(self.filepath) as json_file:
             collection = json.load(json_file)
 
+        logging.info(f'Completed loading {self.filepath}')
+
         if self.select_fields:
+            logging.info('Filtering fields...')
             return self.filter_fields(
                 collection=collection,
                 fields=self.select_fields

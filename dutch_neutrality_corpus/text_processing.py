@@ -7,7 +7,10 @@ import mwparserfromhell
 from nltk import sent_tokenize
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 
-logging.basicConfig(level='INFO')
+logging.basicConfig(
+    level='INFO',
+    format='%(asctime)s %(message)s',
+    filename='dwnc.log')
 
 # TODO: change to dutch...
 BERT_MODEL = 'bert-base-uncased'
@@ -138,7 +141,6 @@ def apply_text_sanitation(row, apply_to_field, new_field):
     elif isinstance(text, str):
         response = text_sanitation(text=text)
 
-    # print(response)
     return {
         new_field: response
     }
