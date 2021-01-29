@@ -24,8 +24,10 @@ from dutch_neutrality_corpus.revision_processing import (
 )
 from dutch_neutrality_corpus.utils import (
     LoadJSONStage,
+    LoadCSVFileStage,
     LoadXMLFileStage,
-    SaveIterableToJSONStage
+    SaveIterableToJSONStage,
+    SaveIterableToCSVStage
 )
 
 
@@ -61,8 +63,11 @@ def main():
     input_file = str(args.input_file)
     output_file = str(args.output_file)
 
+    n_revisions = None
+    if args.n_revisions:
+        n_revisions = int(args.n_revisions)
+
     if pipeline_name == 'identify':
-        n_revisions = args.n_revisions
 
         stages = [
             LoadXMLFileStage(
@@ -73,17 +78,19 @@ def main():
             SaveIterableToJSONStage(filepath=output_file)
         ]
     elif pipeline_name == 'retrieve':
+        n_revisions = args.n_revisions
         stages = [
-            LoadJSONStage(
+            LoadCSVFileStage(
                 filepath=input_file,
                 select_fields=['revision_id'],
+                n_revisions=n_revisions
             ),
             Stage(func=retrieve_single_revision, filter_collection=True),
-            SaveIterableToJSONStage(filepath=output_file)
+            SaveIterableToCSVStage(filepath=output_file)
         ]
     elif pipeline_name == 'prepare':
         stages = [
-            LoadJSONStage(
+            LoadCSVFileStage(
                 filepath=input_file,
                 select_fields=[
                     'revision_id',

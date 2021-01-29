@@ -65,7 +65,9 @@ class Stage():
         # Invoke
         results = list(results)
 
-        logging.info(f'Completed Stage(func={self.func.__name__})...')
+        logging.info(
+            f'Completed Stage(func={self.func.__name__}) '
+            f'with {len(results)} results')
 
         return results
 
