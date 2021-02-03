@@ -39,7 +39,9 @@ class Stage():
         return (row for rows in results for row in rows)
 
     def apply(self, collection):
-        logging.info(f'Applying Stage(func={self.func.__name__})...')
+
+        function_name = self.func.__name__
+        logging.info(f'Applying Stage(func={function_name})...')
 
         # Distributes work over cores
         pool = multiprocessing.Pool(self.n_workers)
@@ -66,7 +68,7 @@ class Stage():
         results = list(results)
 
         logging.info(
-            f'Completed Stage(func={self.func.__name__}) '
+            f'Completed Stage(func={function_name}) '
             f'with {len(results)} results')
 
         return results

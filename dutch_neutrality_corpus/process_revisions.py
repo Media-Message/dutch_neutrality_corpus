@@ -8,11 +8,17 @@ import numpy as np
 from simplediff import diff
 import Levenshtein
 from nltk import word_tokenize
+from nltk.translate.bleu_score import (
+    sentence_bleu,
+    SmoothingFunction)
+
 
 logging.basicConfig(
     level='INFO',
     format='%(asctime)s %(message)s',
     filename='dwnc.log')
+
+CHENCHERRY_SMOOTHING = SmoothingFunction().method1
 
 
 def calculate_bleu_score(hyp, ref):
@@ -47,33 +53,54 @@ def calculate_bleu_score(hyp, ref):
     return 100 * bleu
 
 
-def find_matches(a_list, b_list, delta=3):
+def find_matches(prior_list, post_list, delta=3):
 
-    for i in range(len(a_list)):
+    post_length = len(post_list)
 
-        min_range = max(i - delta, 0)
-        max_range = min(i + delta, len(b_list))
+    for prior_idx, prior_tokens in enumerate(prior_list):
 
-        a_tokens = a_list[i].split()
+        min_range = max(prior_idx - delta, 0)
+        max_range = min(prior_idx + delta, post_length)
+
+        post_tokens = \
+            [p.split() for p in post_list[min_range:max_range]]
+
+        neighborhood_bleu_scores = \
+            sentence_bleu(
+                references=post_tokens,
+                hypothesis=prior_tokens)
+
+        bleu_score, post_idx = max(neighborhood_bleu_scores)
+
+
+def find_matches_(prior_list, post_list, delta=3):
+
+    for prior_idx in range(len(prior_list)):
+
+        min_range = max(prior_idx - delta, 0)
+        max_range = min(prior_idx + delta, len(post_list))
+
+        prior_tokens = prior_list[prior_idx].split()
 
         neighborhood_bleus = [
             (
                 calculate_bleu_score(
-                    hyp=a_tokens,
-                    ref=b_list[j].split()
+                    hyp=prior_tokens,
+                    ref=post_list[post_idx].split()
                 ),
-                j
+                post_idx
             )
-            for j in range(min_range, max_range)
+            for post_idx in range(min_range, max_range)
         ]
-        # corner case: len(a_list) >> len(b_list)
+
+        # corner case: len(prior_list) >> len(post_list)
         if not neighborhood_bleus:
             logging.info('BLEU corner case')
             continue
 
-        max_bleu, match_idx = max(neighborhood_bleus)
+        bleu_score, post_idx = max(neighborhood_bleus)
 
-        yield i, match_idx, max_bleu
+        yield prior_idx, post_idx, bleu_score
 
 # TODO: find dutch spell checker later...
 # def is_spelling_diff(d):
@@ -172,6 +199,58 @@ def passes_min_similarity_criteria(token_labels, min_proportion=0.5):
     return False
 
 
+# TODO: extract out and debug...
+def apply_example_generation(row, delta=3):
+
+    prior_sentence_raw = row['prior_sentences_raw']
+    post_sentence_raw = row['post_sentences_raw']
+    prior_sentence_tokens = row['prior_sentences_tokens']
+    post_sentence_tokens = row['post_sentences_tokens']
+    revision_id = row['revision_id']
+
+    post_length = len(post_sentence_tokens)
+
+    examples = []
+    for prior_idx, prior_tokens in enumerate(prior_sentence_tokens):
+
+        min_range = max(prior_idx - delta, 0)
+        max_range = min(prior_idx + delta, post_length)
+        candidate_post_tokens = post_sentence_tokens[min_range:max_range]
+
+        split_post_tokens = [p.split() for p in candidate_post_tokens]
+        split_prior_tokens = prior_tokens.split()
+
+        neighborhood_bleu_scores = \
+            [
+                sentence_bleu(
+                    references=[p],
+                    hypothesis=split_prior_tokens,
+                    smoothing_function=CHENCHERRY_SMOOTHING
+                )
+                for p in split_post_tokens
+            ]
+
+        max_bleu_score = np.max(neighborhood_bleu_scores)
+
+        if max_bleu_score > 0:
+            post_idx = np.argmax(neighborhood_bleu_scores)
+            selected_post_tokens = post_sentence_tokens[post_idx]
+
+            examples.append(
+                {
+                    'revision_id': revision_id,
+                    'bleu_score': max_bleu_score,
+                    'prior_sentence_raw': prior_sentence_raw,
+                    'prior_sentence_tokens': prior_tokens,
+                    'post_sentence_raw': post_sentence_raw,
+                    'post_sentence_tokens': selected_post_tokens
+                }
+            )
+
+    print(examples)
+    return examples
+
+
 def apply_matching_rules(row):
 
     prior_sentence_raw = row['prior_sentences_raw']
@@ -185,13 +264,13 @@ def apply_matching_rules(row):
         post_sentence_tokens)
 
     examples = []
-    for i, j, bleu_score in matches:
+    for prior_idx, post_idx, bleu_score in matches:
 
         # Index text and tokens
-        prior_raw = prior_sentence_raw[i]
-        prior_tokens = prior_sentence_tokens[i]
-        post_raw = post_sentence_raw[j]
-        post_tokens = post_sentence_tokens[j]
+        prior_raw = prior_sentence_raw[prior_idx]
+        prior_tokens = prior_sentence_tokens[prior_idx]
+        post_raw = post_sentence_raw[post_idx]
+        post_tokens = post_sentence_tokens[post_idx]
 
         word_diff = diff(
             word_tokenize(prior_raw),
@@ -211,6 +290,11 @@ def apply_matching_rules(row):
 
         single_word_edit = is_single_word_edit(word_diff)
 
+        is_exact_match = \
+            meets_exact_match_criteria(
+                bleu_score=bleu_score,
+                prior=prior_raw,
+                post=post_raw)
         passes_min_bleu = \
             passes_min_bleu_criteria(bleu_score=bleu_score)
         passes_only_punctuation = \
@@ -225,10 +309,7 @@ def apply_matching_rules(row):
         token_labels = None
 
         # Exact match
-        if meets_exact_match_criteria(
-                bleu_score=bleu_score,
-                prior=prior_raw,
-                post=post_raw):
+        if is_exact_match:
             logging.info(f'Exact match: {revision_id}')
             keep = True
             is_word_edit = None
@@ -245,7 +326,8 @@ def apply_matching_rules(row):
 
         if not keep:
             logging.info(
-                f'Discarding keeping: revision_id={revision_id} index={i}')
+                f'Discarding keeping: revision_id={revision_id} '
+                f'index={prior_idx}')
             continue
 
         examples.append(
@@ -554,3 +636,33 @@ def filter_on_first_tier_rules(row,
 #     #     # return None
 
 #     return processed_revisions
+
+
+# def find_matches(prior_list, post_list, delta=3):
+
+#     for prior_idx in range(len(prior_list)):
+
+#         min_range = max(prior_idx - delta, 0)
+#         max_range = min(prior_idx + delta, len(post_list))
+
+#         prior_tokens = prior_list[prior_idx].split()
+
+#         neighborhood_bleus = [
+#             (
+#                 calculate_bleu_score(
+#                     hyp=prior_tokens,
+#                     ref=post_list[post_idx].split()
+#                 ),
+#                 post_idx
+#             )
+#             for post_idx in range(min_range, max_range)
+#         ]
+
+#         # corner case: len(prior_list) >> len(post_list)
+#         if not neighborhood_bleus:
+#             logging.info('BLEU corner case')
+#             continue
+
+#         bleu_score, post_idx = max(neighborhood_bleus)
+
+#         yield prior_idx, post_idx, bleu_score

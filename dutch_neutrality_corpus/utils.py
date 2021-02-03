@@ -44,8 +44,8 @@ class LoadCSVFileStage(IOStage):
 
         kwargs = {'fields': fields}
         filter_func = partial(
-                self.filter_dict,
-                **kwargs)
+            self.filter_dict,
+            **kwargs)
 
         return pool.imap(filter_func, collection)
 
@@ -154,13 +154,15 @@ class SaveIterableToCSVStage(IOStage):
         return True
 
 
-class LoadJSONStage(IOStage):
+class LoadJSONFileStage(IOStage):
 
     def __init__(self,
                  filepath,
+                 n_revisions=None,
                  select_fields=None,
                  n_workers=None):
         super().__init__(filepath)
+        self.n_revisions = n_revisions
         self.select_fields = select_fields
         self.n_workers = n_workers
 
@@ -176,8 +178,8 @@ class LoadJSONStage(IOStage):
 
         kwargs = {'fields': fields}
         filter_func = partial(
-                self.filter_dict,
-                **kwargs)
+            self.filter_dict,
+            **kwargs)
 
         return pool.imap(filter_func, collection)
 
@@ -192,9 +194,15 @@ class LoadJSONStage(IOStage):
 
         if self.select_fields:
             logging.info('Filtering fields...')
-            return self.filter_fields(
+            collection = self.filter_fields(
                 collection=collection,
                 fields=self.select_fields
             )
+
+        if self.n_revisions:
+            logging.info(
+                f'Selecting first {self.n_revisions} from {self.filepath}'
+            )
+            collection = list(collection)[:self.n_revisions]
 
         return collection

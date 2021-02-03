@@ -8,22 +8,27 @@ from dutch_neutrality_corpus.pipeline import (
     Stage)
 from dutch_neutrality_corpus.comment_filtering import (
     apply_npov_identification)
-from dutch_neutrality_corpus.text_processing import (
+from dutch_neutrality_corpus.process_text import (
     apply_text_sanitation,
     apply_sentence_tokenization,
     apply_bert_tokenization
 )
-from dutch_neutrality_corpus.revision_retrieval import (
+from dutch_neutrality_corpus.diff_revisions import (
+    diff_single_revision,
+    apply_example_extraction
+)
+from dutch_neutrality_corpus.retrieve_revisions import (
     retrieve_single_revision
 )
-from dutch_neutrality_corpus.revision_processing import (
+from dutch_neutrality_corpus.process_revisions import (
     filter_on_first_tier_rules,
+    apply_example_generation,
     apply_matching_rules,
     RowDeduplicationStage,
     FilterOnTextLengthStage
 )
 from dutch_neutrality_corpus.utils import (
-    LoadJSONStage,
+    LoadJSONFileStage,
     LoadCSVFileStage,
     LoadXMLFileStage,
     SaveIterableToJSONStage,
@@ -68,7 +73,6 @@ def main():
         n_revisions = int(args.n_revisions)
 
     if pipeline_name == 'identify':
-
         stages = [
             LoadXMLFileStage(
                 filepath=input_file,
@@ -78,7 +82,7 @@ def main():
             SaveIterableToJSONStage(filepath=output_file)
         ]
     elif pipeline_name == 'retrieve':
-        n_revisions = args.n_revisions
+        # TODO: use CSV temporarily...
         stages = [
             LoadCSVFileStage(
                 filepath=input_file,
@@ -86,12 +90,34 @@ def main():
                 n_revisions=n_revisions
             ),
             Stage(func=retrieve_single_revision, filter_collection=True),
-            SaveIterableToCSVStage(filepath=output_file)
+            SaveIterableToJSONStage(filepath=output_file)
+        ]
+    elif pipeline_name == 'diff':
+        # TODO: Move diff into final pipeline later...
+        # stages = [
+        #     LoadJSONFileStage(
+        #         filepath=input_file,
+        #         n_revisions=n_revisions
+        #     ),
+        #     Stage(func=diff_single_revision, filter_collection=True),
+        #     SaveIterableToJSONStage(filepath=output_file)
+        # ]
+        stages = [
+            LoadJSONFileStage(
+                filepath=input_file,
+                n_revisions=n_revisions
+            ),
+            Stage(
+                func=apply_example_extraction,
+                filter_collection=True,
+                n_workers=1),
+            SaveIterableToJSONStage(filepath=output_file)
         ]
     elif pipeline_name == 'prepare':
         stages = [
-            LoadCSVFileStage(
+            LoadJSONFileStage(
                 filepath=input_file,
+                n_revisions=n_revisions,
                 select_fields=[
                     'revision_id',
                     'prior',
@@ -106,7 +132,7 @@ def main():
                 func_kwargs={
                     'filter_non_empty': True,
                     'filter_deleted_and_added': True,
-                    'filter_single_edit': True
+                    'filter_single_edit': False  # Ignore for now.
                 },
                 filter_collection=True
             ),
@@ -169,19 +195,20 @@ def main():
             # Filtering rules
             Pipeline(
                 stages=[
-                    Stage(func=apply_matching_rules, flatten=True),
-                    RowDeduplicationStage(
-                        deduplication_fields=[
-                            'revision_id',
-                            'prior_sentence_raw',
-                            'post_sentence_raw'
-                        ]),
-                    FilterOnTextLengthStage(
-                        field_a='prior_sentence_raw',
-                        field_b='post_sentence_raw'
-                    )
+                    Stage(func=apply_example_generation, flatten=True),
+                    # Stage(func=apply_matching_rules, flatten=True),
+                    # RowDeduplicationStage(
+                    #     deduplication_fields=[
+                    #         'revision_id',
+                    #         'prior_sentence_raw',
+                    #         'post_sentence_raw'
+                    #     ]),
+                    # FilterOnTextLengthStage(
+                    #     field_a='prior_sentence_raw',
+                    #     field_b='post_sentence_raw'
+                    # )
                 ]),
-            SaveIterableToJSONStage(filepath=output_file)
+            # SaveIterableToCSVStage(filepath=output_file)
         ]
 
     # Run pipeline

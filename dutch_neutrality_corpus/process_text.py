@@ -108,9 +108,9 @@ def text_sanitation(text):
     plaintext = plaintext.replace('<blockquote>', '')
 
     # remove tabs and newlines (those is our deliminators beeyotch)
-    plaintext.replace('\t', ' ')
-    plaintext.replace('\n', ' ')
-    plaintext.replace('\r', '')
+    plaintext = plaintext.replace('\t', ' ')
+    plaintext = plaintext.replace('\n', ' ')
+    plaintext = plaintext.replace('\r', '')
 
     # collapse multispaces (again again)
     plaintext = re.sub(r'[ ]+', ' ', plaintext).strip()

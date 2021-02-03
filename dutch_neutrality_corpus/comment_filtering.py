@@ -60,8 +60,10 @@ class RevisionComment():
         # TODO: create Dutch NPOV tags
         if re.search(NPOV_REGEX, comment):
 
+            # TODO: remove redundancy later...
+            # povere = poor
             # special case: "poverty", "impovershiment", etc
-            if 'pover' in comment:
+            if 'pover' in comment or 'povere' in comment:
                 return False
             return True
 
