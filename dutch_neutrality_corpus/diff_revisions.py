@@ -4,7 +4,9 @@ import logging
 import string
 from urllib.request import urlopen
 import unidecode
+from typing import List, NamedTuple
 
+import spacy
 from bs4 import BeautifulSoup
 from nltk import sent_tokenize
 from nltk import word_tokenize
@@ -25,12 +27,80 @@ SPLIT_TOKEN = '<SPLIT>'
 START_TOKEN = '<EDIT-START>'
 END_TOKEN = '<EDIT-END>'
 
+INNER_TOKEN_REGEX = re.compile(r'<EDIT-START>(.*)<EDIT-END>', re.DOTALL)
+
+START_TOKEN_LENGTH = len(START_TOKEN)
+END_TOKEN_LENGTH = len(END_TOKEN)
+
+# TODO: use larger model in experiments...
+nlp = spacy.load('nl_core_news_sm')
+
 # TODO: remove from nodes...
 # "De neutraliteit van dit artikel is
 # [[Wikipedia:Onenigheid over de neutraliteit|omstreden]].""
 
 # TODO: ignore title changes?
 # i.e. == Jesus in the [[Quran]] ==
+
+
+# def get_token_indices_of_text_span(text):
+
+#     matches = re.finditer(INNER_TOKEN_REGEX, text)
+
+
+#     spans = []
+#     for match in matches:
+#         start_index = match.start() + START_TOKEN_LENGTH
+#         end_index = match.end() - END_TOKEN_LENGTH
+#         span = {
+#             'start_index': start_index
+#             'end_index': end_index
+#         }
+
+#     return start, end
+
+def is_index_in_list(index, l):
+    return index < len(l)
+
+
+# def create_text_spans(sentence_tokens, label_mask):
+
+#     # TODO: refactor...
+#     spans_indices = []
+#     sentence = ''
+
+#     for (word, label) in zip(sentence_tokens, label_mask):
+
+#         if label == 1:
+#             start_index = len(sentence)
+
+#             # Account for space added during later join
+#             if start_index > 0:
+#                 start_index += 1
+
+#             end_index = start_index + len(word)
+
+#             spans_indices.append({
+#                 'start': start_index,
+#                 'end': end_index
+#             })
+
+#         sentence = ' '.join([sentence, word])
+
+#     merged_spans = []
+#     start_counter = None
+#     for list_idx, span in enumerate(spans_indices):
+#         current_start_index, current_end_index = span[0], span[1]
+
+#         previous_list_idx = list_idx - 1
+#         if is_index_in_list(previous_list_idx, spans_indices):
+#             previous_start_index, previous_end_index = span[0], span[1]
+
+#         spans_indices.append(
+#             [start_index, end_index, 'SUBJ']
+#         )
+
+#     return text, spans
 
 
 def parse_nodes_from_html(html_content):
@@ -83,97 +153,231 @@ def convert_to_tokens_and_labels(terms, label=0):
     return mask, terms_tokens
 
 
-def convert_annotated_text_to_corpus_examples(
+class Span():
+
+    def __init__(self,
+                 annotated_terms,
+                 label,
+                 start=None,
+                 end=None):
+        self.annotated_terms = annotated_terms
+        self.label = label
+        self.start = start
+        self.end = end
+        self.text = self.convert_annotated_text_to_text(annotated_terms)
+        self.tokens = self.convert_text_to_tokens(self.text)
+        self.label_mask = self.get_label_mask(self.tokens)
+
+    def convert_annotated_text_to_text(self, annotated_terms):
+        text = annotated_terms.replace(SPLIT_TOKEN, '')\
+            .replace(START_TOKEN, '')\
+            .replace(END_TOKEN, '')
+        return html_sanitization(text)
+
+    def convert_text_to_tokens(self, text):
+        return word_tokenize(text)
+
+    def length(self):
+        return len(self.text)
+
+    def get_label_mask(self, tokens):
+        return [self.label] * len(self.tokens)
+
+
+class Sentence():
+
+    def __init__(self,
+                 annotated_text,
+                 revision_id,
+                 is_revision=False):
+        self.annotated_text = annotated_text
+        self.revision_id = revision_id
+        self.is_revision = is_revision
+        self.spans = self.convert_sentence_to_spans(annotated_text)
+
+    def get_text(self):
+        return ' '.join([span.text for span in self.spans])
+
+    def get_tokens(self):
+        return [t for span in self.spans for t in span.tokens]
+
+    def get_label_masks(self):
+        return [m for span in self.spans for m in span.label_mask]
+
+    def convert_sentence_to_spans(self, annotated_text):
+        split_terms = annotated_text.split(SPLIT_TOKEN)
+
+        spans = []
+        for terms in split_terms:
+
+            label = 0
+            if self.is_revision:
+                label = 0
+            elif (START_TOKEN in terms) or (END_TOKEN in terms):
+                label = 1
+
+            spans.append(
+                Span(annotated_terms=terms, label=label)
+            )
+
+        return spans
+
+    def get_npov_labels(self):
+        npov_labels = []
+        span_count = len(self.spans)
+        length_counter = 0
+        for idx, span in enumerate(self.spans):
+
+            start_index = length_counter
+            end_index = length_counter + span.length()
+            length_counter += span.length()
+
+            if idx > 0 and idx < span_count:
+                length_counter += 1
+
+            if span.label == 1:
+                npov_labels.append(
+                    [start_index, end_index, 'SUBJ']
+                )
+
+        return npov_labels
+
+    def convert_spans_to_corpus_example(self, spans):
+        return {
+            'text': self.get_text(),
+            'tokens': self.get_tokens(),
+            'labels': self.get_npov_labels(),
+            'label_masks': self.get_label_masks(),
+            'is_revision': self.is_revision
+        }
+
+    def create_corpus_example(self):
+        spans = self.convert_sentence_to_spans(self.annotated_text)
+        corpus_example = self.convert_spans_to_corpus_example(spans)
+        return corpus_example
+
+# TODO: create AnnotatedText object...
+
+
+def convert_annotated_text_to_corpus(
         annotated_text,
+        revision_id,
         is_revision=False):
 
     # TODO: classify each deleted span...
     # i.e. valid, link change, etc.
     sentences = sent_tokenize(annotated_text)
 
-    sentence_tokens = []
-    label_masks = []
-    original_sentences = []
+    examples = []
     for sentence in sentences:
 
         if SPLIT_TOKEN not in sentence:
             # TODO: consider adding as unbiased...
             continue
 
-        terms_list = []
-        label_mask = []
+        sentence_object = \
+            Sentence(
+                annotated_text=sentence,
+                revision_id=revision_id,
+                is_revision=is_revision)
 
-        is_inner_sentence_span = \
-            (START_TOKEN in sentence and
-                END_TOKEN in sentence)
-
-        is_start_of_multi_sentence_span = \
-            (START_TOKEN in sentence and
-                END_TOKEN in sentence)
-
-        is_end_of_multi_sentence_span = \
-            (START_TOKEN not in sentence and
-                END_TOKEN in sentence)
-
-        split_prior_terms = sentence.split(SPLIT_TOKEN)
-
-        for terms in split_prior_terms:
-
-            if is_revision:
-                label = 0
-            elif (is_inner_sentence_span and
-                    (START_TOKEN not in terms)):
-                label = 0
-            elif (is_start_of_multi_sentence_span and
-                    (START_TOKEN not in terms)):
-                label = 0
-            elif (is_end_of_multi_sentence_span and
-                    (END_TOKEN not in terms)):
-                label = 0
-            else:
-                # Contains edit
-                label = 1
-
-            terms = terms.replace(START_TOKEN, '')
-            terms = terms.replace(END_TOKEN, '')
-
-            mask, term_tokens = \
-                convert_to_tokens_and_labels(
-                    terms=terms,
-                    label=label)
-
-            terms_list.extend(term_tokens)
-            label_mask.extend(mask)
-
-        sentence_tokens.append(terms_list)
-        label_masks.append(label_mask)
-        original_sentences.append(
-            sentence.replace(SPLIT_TOKEN, '')
-            .replace(START_TOKEN, '')
-            .replace(END_TOKEN, '')
-        )
-
-    return sentence_tokens, label_masks, original_sentences
-
-
-def create_corpus_example(sentence_tokens,
-                          label_masks,
-                          original_sentences,
-                          revision_id,
-                          category):
-    tokens_labels_sentences = \
-        zip(sentence_tokens, label_masks, original_sentences)
-    examples = [
-        {
-            'revision_id': revision_id,
-            'sentence_tokens': t,
-            'label_mask': l,
-            'original_sentence': s,
-            'category': category
-        } for t, l, s in tokens_labels_sentences
-    ]
+        example = sentence_object.create_corpus_example()
+        examples.append(example)
 
     return examples
+
+
+# def convert_annotated_text_to_corpus_examples(
+#         annotated_text,
+#         is_revision=False):
+
+#     # TODO: classify each deleted span...
+#     # i.e. valid, link change, etc.
+#     sentences = sent_tokenize(annotated_text)
+
+#     sentence_tokens = []
+#     label_masks = []
+#     original_sentences = []
+#     for sentence in sentences:
+
+#         if SPLIT_TOKEN not in sentence:
+#             # TODO: consider adding as unbiased...
+#             continue
+
+#         terms_list = []
+#         label_mask = []
+
+#         is_inner_sentence_span = \
+#             (START_TOKEN in sentence and
+#                 END_TOKEN in sentence)
+
+#         is_start_of_multi_sentence_span = \
+#             (START_TOKEN in sentence and
+#                 END_TOKEN in sentence)
+
+#         is_end_of_multi_sentence_span = \
+#             (START_TOKEN not in sentence and
+#                 END_TOKEN in sentence)
+
+#         split_prior_terms = sentence.split(SPLIT_TOKEN)
+
+#         for terms in split_prior_terms:
+
+#             if is_revision:
+#                 label = 0
+#             elif (is_inner_sentence_span and
+#                     (START_TOKEN not in terms)):
+#                 label = 0
+#             elif (is_start_of_multi_sentence_span and
+#                     (START_TOKEN not in terms)):
+#                 label = 0
+#             elif (is_end_of_multi_sentence_span and
+#                     (END_TOKEN not in terms)):
+#                 label = 0
+#             else:
+#                 # Contains edit
+#                 label = 1
+
+#             terms = terms.replace(START_TOKEN, '')
+#             terms = terms.replace(END_TOKEN, '')
+
+#             mask, term_tokens = \
+#                 convert_to_tokens_and_labels(
+#                     terms=terms,
+#                     label=label)
+
+#             terms_list.extend(term_tokens)
+#             label_mask.extend(mask)
+
+#         sentence_tokens.append(terms_list)
+#         label_masks.append(label_mask)
+#         original_sentences.append(
+#             sentence.replace(SPLIT_TOKEN, '')
+#             .replace(START_TOKEN, '')
+#             .replace(END_TOKEN, '')
+#         )
+
+#     return sentence_tokens, label_masks, original_sentences
+
+
+# def create_corpus_example(sentence_tokens,
+#                           label_masks,
+#                           original_sentences,
+#                           revision_id,
+#                           category):
+#     tokens_labels_sentences = \
+#         zip(sentence_tokens, label_masks, original_sentences)
+#     examples = [
+#         {
+#             'revision_id': revision_id,
+#             'sentence_tokens': t,
+#             'label_mask': l,
+#             'original_sentence': s,
+#             'category': category
+#         } for t, l, s in tokens_labels_sentences
+#     ]
+
+#     return examples
 
 
 def extract_examples(html_content, revision_id):
@@ -252,35 +456,21 @@ def extract_examples(html_content, revision_id):
 
         if prior_deleted_spans_list:
 
-            sentence_tokens, label_masks, original_sentences = \
-                convert_annotated_text_to_corpus_examples(
-                    annotated_prior_div,
-                    is_revision=False)
-
             examples = \
-                create_corpus_example(
-                    sentence_tokens,
-                    label_masks,
-                    original_sentences,
-                    revision_id,
-                    category='prior')
+                convert_annotated_text_to_corpus(
+                    annotated_prior_div,
+                    revision_id=revision_id,
+                    is_revision=False)
 
             corpus.extend(examples)
 
         if post_added_spans_list:
 
-            sentence_tokens, label_masks, original_sentences = \
-                convert_annotated_text_to_corpus_examples(
-                    annotated_post_div,
-                    is_revision=True)
-
             examples = \
-                create_corpus_example(
-                    sentence_tokens,
-                    label_masks,
-                    original_sentences,
-                    revision_id,
-                    category='posterior')
+                convert_annotated_text_to_corpus(
+                    annotated_prior_div,
+                    revision_id=revision_id,
+                    is_revision=True)
 
             corpus.extend(examples)
 

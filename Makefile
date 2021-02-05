@@ -38,7 +38,7 @@ diff_sample:
 		--pipeline-name diff \
 		--input-file data/revision_html.json \
 		--output-file data/revision_texts.json \
-		--n_revisions 100
+		--n_revisions 1
 
 prepare_sample:
 	dutch_neutrality_corpus \
