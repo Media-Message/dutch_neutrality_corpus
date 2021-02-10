@@ -17,14 +17,8 @@ retrieve:
 diff:
 	dutch_neutrality_corpus \
 		--pipeline-name diff \
-		--input-file data/revision_html.json \
+		--input-file data/revision_html_full.json \
 		--output-file data/revision_texts.json
-
-prepare:
-	dutch_neutrality_corpus \
-		--pipeline-name prepare \
-		--input-file data/revision_texts.json \
-		--output-file data/neutrality_corpus.csv
 
 retrieve_sample:
 	dutch_neutrality_corpus \
@@ -36,16 +30,15 @@ retrieve_sample:
 diff_sample:
 	dutch_neutrality_corpus \
 		--pipeline-name diff \
-		--input-file data/revision_html.json \
-		--output-file data/revision_texts.json \
-		--n_revisions 1
+		--input-file data/revision_html_sample.json \
+		--output-file data/revision_texts_sample.json \
+		--n_revisions 100
 
-prepare_sample:
+prepare_doccano:
 	dutch_neutrality_corpus \
-		--pipeline-name prepare \
+		--pipeline-name prepare_doccano \
 		--input-file data/revision_texts.json \
-		--output-file data/neutrality_corpus.csv \
-		--n_revisions 5
+		--output-file data/revision_texts_doccano.json
 
 stream_log:
 	 tail -f -n10 dwnc.log

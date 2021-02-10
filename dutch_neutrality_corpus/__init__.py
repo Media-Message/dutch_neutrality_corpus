@@ -8,13 +8,7 @@ from dutch_neutrality_corpus.pipeline import (
     Stage)
 from dutch_neutrality_corpus.comment_filtering import (
     apply_npov_identification)
-from dutch_neutrality_corpus.process_text import (
-    apply_text_sanitation,
-    apply_sentence_tokenization,
-    apply_bert_tokenization
-)
 from dutch_neutrality_corpus.diff_revisions import (
-    diff_single_revision,
     apply_example_extraction
 )
 from dutch_neutrality_corpus.retrieve_revisions import (
@@ -34,7 +28,12 @@ from dutch_neutrality_corpus.utils import (
     SaveIterableToJSONStage,
     SaveIterableToCSVStage
 )
-
+from dutch_neutrality_corpus.doccano import (
+    apply_filter_for_doccano_format
+)
+from dutch_neutrality_corpus.category_filter import (
+    apply_category_filter
+)
 
 logging.basicConfig(
     level='INFO',
@@ -82,133 +81,41 @@ def main():
             SaveIterableToJSONStage(filepath=output_file)
         ]
     elif pipeline_name == 'retrieve':
-        # TODO: use CSV temporarily...
         stages = [
             LoadCSVFileStage(
                 filepath=input_file,
                 select_fields=['revision_id'],
                 n_revisions=n_revisions
             ),
+            # TODO: Filter collection=True
             Stage(func=retrieve_single_revision, filter_collection=True),
             SaveIterableToJSONStage(filepath=output_file)
         ]
     elif pipeline_name == 'diff':
-        # TODO: Move diff into final pipeline later...
-        # stages = [
-        #     LoadJSONFileStage(
-        #         filepath=input_file,
-        #         n_revisions=n_revisions
-        #     ),
-        #     Stage(func=diff_single_revision, filter_collection=True),
-        #     SaveIterableToJSONStage(filepath=output_file)
-        # ]
         stages = [
             LoadJSONFileStage(
                 filepath=input_file,
                 n_revisions=n_revisions
             ),
             Stage(
-                func=apply_example_extraction,
-                filter_collection=True,
-                n_workers=1),
-            SaveIterableToJSONStage(filepath=output_file)
+                func=apply_category_filter,
+                filter_collection=True),
+            # Stage(
+            #     func=apply_example_extraction,
+            #     filter_collection=True),
+            # SaveIterableToJSONStage(filepath=output_file)
         ]
-    elif pipeline_name == 'prepare':
+    elif pipeline_name == 'prepare_doccano':
         stages = [
             LoadJSONFileStage(
                 filepath=input_file,
-                n_revisions=n_revisions,
-                select_fields=[
-                    'revision_id',
-                    'prior',
-                    'post',
-                    'prior_deleted',
-                    'post_added'
-                ]
+                n_revisions=n_revisions
             ),
-            # Hard filter on edits
-            Stage(
-                func=filter_on_first_tier_rules,
-                func_kwargs={
-                    'filter_non_empty': True,
-                    'filter_deleted_and_added': True,
-                    'filter_single_edit': False  # Ignore for now.
-                },
-                filter_collection=True
-            ),
-            # Text processing for prior text
-            Pipeline(
-                stages=[
-                    Stage(
-                        func=apply_text_sanitation,
-                        func_kwargs={
-                            'apply_to_field': 'prior',
-                            'new_field': 'prior_text'
-                        },
-                        accumulate=True
-                    ),
-                    Stage(
-                        func=apply_sentence_tokenization,
-                        func_kwargs={
-                            'apply_to_field': 'prior_text',
-                            'new_field': 'prior_sentences_raw'
-                        },
-                        accumulate=True
-                    ),
-                    Stage(
-                        func=apply_bert_tokenization,
-                        func_kwargs={
-                            'apply_to_field': 'prior_sentences_raw',
-                            'new_field': 'prior_sentences_tokens'
-                        },
-                        accumulate=True
-                    )
-                ]),
-            # Text processing for posterior text
-            Pipeline(
-                stages=[
-                    Stage(
-                        func=apply_text_sanitation,
-                        func_kwargs={
-                            'apply_to_field': 'post',
-                            'new_field': 'post_text'
-                        },
-                        accumulate=True
-                    ),
-                    Stage(
-                        func=apply_sentence_tokenization,
-                        func_kwargs={
-                            'apply_to_field': 'post_text',
-                            'new_field': 'post_sentences_raw'
-                        },
-                        accumulate=True
-                    ),
-                    Stage(
-                        func=apply_bert_tokenization,
-                        func_kwargs={
-                            'apply_to_field': 'post_sentences_raw',
-                            'new_field': 'post_sentences_tokens'
-                        },
-                        accumulate=True
-                    )
-                ]),
-            # Filtering rules
-            Pipeline(
-                stages=[
-                    Stage(func=apply_example_generation, flatten=True),
-                    # Stage(func=apply_matching_rules, flatten=True),
-                    # RowDeduplicationStage(
-                    #     deduplication_fields=[
-                    #         'revision_id',
-                    #         'prior_sentence_raw',
-                    #         'post_sentence_raw'
-                    #     ]),
-                    # FilterOnTextLengthStage(
-                    #     field_a='prior_sentence_raw',
-                    #     field_b='post_sentence_raw'
-                    # )
-                ]),
-            # SaveIterableToCSVStage(filepath=output_file)
+            Stage(func=apply_filter_for_doccano_format,
+                  filter_collection=True),
+            SaveIterableToJSONStage(
+                filepath=output_file,
+                write_as_array=False)
         ]
 
     # Run pipeline

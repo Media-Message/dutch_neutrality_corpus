@@ -247,7 +247,6 @@ def apply_example_generation(row, delta=3):
                 }
             )
 
-    print(examples)
     return examples
 
 

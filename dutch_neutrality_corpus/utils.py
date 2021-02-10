@@ -112,8 +112,9 @@ class LoadXMLFileStage(IOStage):
 
 class SaveIterableToJSONStage(IOStage):
 
-    def __init__(self, filepath):
+    def __init__(self, filepath, write_as_array=True):
         super().__init__(filepath)
+        self.write_as_array = write_as_array
 
     def log_statistics(self, collection):
         logging.info(f'Length of saved file: {len(collection)}')
@@ -123,10 +124,18 @@ class SaveIterableToJSONStage(IOStage):
 
         logging.info(f'Saving {self.filepath}...')
 
-        with open(self.filepath, 'w') as outfile:
-            json.dump(collection, outfile)
+        if self.write_as_array:
+            with open(self.filepath, 'w') as outfile:
+                json.dump(collection, outfile)
+
+        else:
+            with open(self.filepath, 'w') as outfile:
+                for row in collection:
+                    json.dump(row, outfile)
+                    outfile.write('\n')
 
         logging.info(f'Save complete to {self.filepath}')
+
         return True
 
 

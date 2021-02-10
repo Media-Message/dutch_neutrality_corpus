@@ -58,10 +58,12 @@ class Stage():
             results = self.update_collection(collection, results)
 
         if self.flatten:
+            logging.info(f'Flattening Stage(func={function_name})...')
             results = self.flatten_results(results)
 
         # Remove empty elements
         if self.filter_collection:
+            logging.info(f'Filtering Stage(func={function_name})...')
             results = filter(None, results)
 
         # Invoke
