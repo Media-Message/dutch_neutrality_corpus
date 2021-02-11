@@ -1,6 +1,6 @@
 
 
-def apply_filter_for_doccano_format(row):
+def apply_conversion_to_doccano_format(row):
 
     first_object = row[0]
     # TODO: remove hack later...

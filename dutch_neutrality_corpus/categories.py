@@ -66,15 +66,11 @@ def extract_categories(html):
 def apply_category_filter(row):
     html = row['html_content']
 
+    # TODO: Ignore guidelines: 'Wikipedia:Richtlijnen'...
     categories_to_keep, categories_to_filter, wikpedia_article_tag = \
         extract_categories(html=html)
 
-    revison_id = row['revision_id']
-
     if categories_to_filter:
-        print(f'revision_id: {revison_id} '
-              f'filter: {categories_to_filter} '
-              f'keep: {categories_to_keep}')
         return {}
 
     row['categories'] = categories_to_keep

@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from nltk import sent_tokenize
 from nltk import word_tokenize
 
-from dutch_neutrality_corpus.process_text import text_sanitation
+from dutch_neutrality_corpus.text import text_sanitation
 from dutch_neutrality_corpus.retrieve_revisions import (
     get_wikipedia_revision_url)
 
@@ -38,10 +38,6 @@ IMAGE_SUFFIX_REGEX = r'.jpeg|.svg|.jpg|.png'
 
 # TODO: ignore title changes?
 # i.e. == Jesus in the [[Quran]] ==
-
-
-def is_index_in_list(index, l):
-    return index < len(l)
 
 
 def parse_nodes_from_html(html_content):
@@ -214,6 +210,7 @@ class Sentence():
 def contains_image_reference(text):
     response = False
     if re.search(IMAGE_SUFFIX_REGEX, text):
+        print('image: ', text)
         response = True
     return response
 

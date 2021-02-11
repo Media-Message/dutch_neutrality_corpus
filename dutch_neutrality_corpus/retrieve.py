@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import logging
 import requests
 
@@ -22,7 +21,8 @@ def get_wikipedia_revision_url(revision_id):
 def query_url_with_backoff(url):
     session = requests.Session()
     response = session.get(url)
-    return response.content.decode()
+    html = response.content.decode()
+    return html
 
 
 def retrieve_single_revision(row):

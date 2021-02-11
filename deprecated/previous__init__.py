@@ -13,7 +13,7 @@ from dutch_neutrality_corpus.process_text import (
     apply_sentence_tokenization,
     apply_bert_tokenization
 )
-from dutch_neutrality_corpus.diff_revisions import (
+from dutch_neutrality_corpus.diff import (
     apply_example_extraction
 )
 from dutch_neutrality_corpus.retrieve_revisions import (
@@ -26,7 +26,7 @@ from dutch_neutrality_corpus.process_revisions import (
     RowDeduplicationStage,
     FilterOnTextLengthStage
 )
-from dutch_neutrality_corpus.utils import (
+from dutch_neutrality_corpus.io import (
     LoadJSONFileStage,
     LoadCSVFileStage,
     LoadXMLFileStage,

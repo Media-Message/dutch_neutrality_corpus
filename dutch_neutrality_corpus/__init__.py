@@ -6,32 +6,24 @@ import argparse
 from dutch_neutrality_corpus.pipeline import (
     Pipeline,
     Stage)
-from dutch_neutrality_corpus.comment_filtering import (
+from dutch_neutrality_corpus.identify import (
     apply_npov_identification)
-from dutch_neutrality_corpus.diff_revisions import (
+from dutch_neutrality_corpus.diff import (
     apply_example_extraction
 )
-from dutch_neutrality_corpus.retrieve_revisions import (
+from dutch_neutrality_corpus.retrieve import (
     retrieve_single_revision
 )
-from dutch_neutrality_corpus.process_revisions import (
-    filter_on_first_tier_rules,
-    apply_example_generation,
-    apply_matching_rules,
-    RowDeduplicationStage,
-    FilterOnTextLengthStage
-)
-from dutch_neutrality_corpus.utils import (
+from dutch_neutrality_corpus.io import (
     LoadJSONFileStage,
     LoadCSVFileStage,
     LoadXMLFileStage,
-    SaveIterableToJSONStage,
-    SaveIterableToCSVStage
+    SaveIterableToJSONStage
 )
 from dutch_neutrality_corpus.doccano import (
-    apply_filter_for_doccano_format
+    apply_conversion_to_doccano_format
 )
-from dutch_neutrality_corpus.category_filter import (
+from dutch_neutrality_corpus.categories import (
     apply_category_filter
 )
 
@@ -81,6 +73,7 @@ def main():
             Stage(func=apply_npov_identification, filter_collection=True),
             SaveIterableToJSONStage(filepath=output_file)
         ]
+
     elif pipeline_name == 'retrieve':
         stages = [
             LoadCSVFileStage(
@@ -88,10 +81,10 @@ def main():
                 select_fields=['revision_id'],
                 n_revisions=n_revisions
             ),
-            # TODO: Filter collection=True
             Stage(func=retrieve_single_revision, filter_collection=True),
             SaveIterableToJSONStage(filepath=output_file)
         ]
+
     elif pipeline_name == 'diff':
         stages = [
             LoadJSONFileStage(
@@ -106,13 +99,14 @@ def main():
                 filter_collection=True),
             SaveIterableToJSONStage(filepath=output_file)
         ]
+
     elif pipeline_name == 'prepare_doccano':
         stages = [
             LoadJSONFileStage(
                 filepath=input_file,
                 n_revisions=n_revisions
             ),
-            Stage(func=apply_filter_for_doccano_format,
+            Stage(func=apply_conversion_to_doccano_format,
                   filter_collection=True),
             SaveIterableToJSONStage(
                 filepath=output_file,
