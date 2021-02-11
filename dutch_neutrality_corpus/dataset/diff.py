@@ -6,8 +6,8 @@ from bs4 import BeautifulSoup
 from nltk import sent_tokenize
 from nltk import word_tokenize
 
-from dutch_neutrality_corpus.text import text_sanitation
-from dutch_neutrality_corpus.retrieve_revisions import (
+from dutch_neutrality_corpus.dataset.text import text_sanitation
+from dutch_neutrality_corpus.dataset.retrieve import (
     get_wikipedia_revision_url)
 
 NODE_REGEX = re.compile(
@@ -210,7 +210,6 @@ class Sentence():
 def contains_image_reference(text):
     response = False
     if re.search(IMAGE_SUFFIX_REGEX, text):
-        print('image: ', text)
         response = True
     return response
 
@@ -242,7 +241,10 @@ def convert_annotated_text_to_corpus(
                 is_revision=is_revision)
 
         example = sentence_object.create_corpus_example()
-        examples.append(example)
+
+        # Ignore empty sentences
+        if example.get('text'):
+            examples.append(example)
 
     return examples
 
@@ -250,8 +252,7 @@ def convert_annotated_text_to_corpus(
 def is_empty_div(node):
     return re.match(
         EMPTY_DIV_REGEX,
-        node.div.prettify(formatter=None)
-    )
+        node.div.prettify(formatter=None))
 
 
 def replace_span_tag_with_split_tokens(annotated_text, is_revision=False):

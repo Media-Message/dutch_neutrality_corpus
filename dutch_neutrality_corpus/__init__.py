@@ -91,7 +91,8 @@ def main():
                 filter_collection=True),
             Stage(
                 func=apply_example_extraction,
-                filter_collection=True),
+                filter_collection=True,
+                flatten=True),
             SaveIterableToJSONStage(filepath=output_file)
         ]
 

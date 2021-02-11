@@ -40,5 +40,11 @@ diff_sample:
 		--output-file data/revision_texts_sample.json \
 		--n_revisions 1000
 
+prepare_doccano_sample:
+	dutch_neutrality_corpus \
+		--pipeline-name prepare_doccano \
+		--input-file data/revision_texts_sample.json \
+		--output-file data/revision_texts_doccano_sample.json
+
 stream_log:
 	 tail -f -n10 dwnc.log

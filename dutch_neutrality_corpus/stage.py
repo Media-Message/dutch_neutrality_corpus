@@ -34,8 +34,14 @@ class Stage():
         return ({**c, **r} for c, r in zip(collection, results))
 
     def flatten_results(self, results):
-        """ Merge within stage """
-        return (row for rows in results for row in rows)
+        """ Flatten list of lists """
+        for rows in results:
+            if not rows:
+                yield {}
+                continue
+
+            for row in rows:
+                yield row
 
     def apply(self, collection):
 
