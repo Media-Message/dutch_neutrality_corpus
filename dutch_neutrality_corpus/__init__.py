@@ -4,28 +4,24 @@ import logging
 import argparse
 
 from dutch_neutrality_corpus.pipeline import (
-    Pipeline,
+    Pipeline)
+from dutch_neutrality_corpus.stage import (
     Stage)
-from dutch_neutrality_corpus.identify import (
-    apply_npov_identification)
-from dutch_neutrality_corpus.diff import (
-    apply_example_extraction
-)
-from dutch_neutrality_corpus.retrieve import (
-    retrieve_single_revision
-)
 from dutch_neutrality_corpus.io import (
     LoadJSONFileStage,
     LoadCSVFileStage,
     LoadXMLFileStage,
-    SaveIterableToJSONStage
-)
-from dutch_neutrality_corpus.doccano import (
-    apply_conversion_to_doccano_format
-)
-from dutch_neutrality_corpus.categories import (
-    apply_category_filter
-)
+    SaveIterableToJSONStage)
+from dutch_neutrality_corpus.dataset.identify import (
+    apply_npov_identification)
+from dutch_neutrality_corpus.dataset.retrieve import (
+    retrieve_single_revision)
+from dutch_neutrality_corpus.dataset.categories import (
+    apply_category_filter)
+from dutch_neutrality_corpus.dataset.diff import (
+    apply_example_extraction)
+from dutch_neutrality_corpus.dataset.doccano import (
+    apply_conversion_to_doccano_format)
 
 
 logging.basicConfig(
@@ -35,7 +31,6 @@ logging.basicConfig(
 
 
 def main():
-
     parser = argparse.ArgumentParser(
         description='Process wiki meta history dump.')
     parser.add_argument('--pipeline-name',
