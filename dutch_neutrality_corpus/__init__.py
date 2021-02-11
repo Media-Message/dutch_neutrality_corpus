@@ -35,6 +35,7 @@ from dutch_neutrality_corpus.category_filter import (
     apply_category_filter
 )
 
+
 logging.basicConfig(
     level='INFO',
     format='%(asctime)s %(message)s',
@@ -100,10 +101,10 @@ def main():
             Stage(
                 func=apply_category_filter,
                 filter_collection=True),
-            # Stage(
-            #     func=apply_example_extraction,
-            #     filter_collection=True),
-            # SaveIterableToJSONStage(filepath=output_file)
+            Stage(
+                func=apply_example_extraction,
+                filter_collection=True),
+            SaveIterableToJSONStage(filepath=output_file)
         ]
     elif pipeline_name == 'prepare_doccano':
         stages = [

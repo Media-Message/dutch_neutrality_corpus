@@ -1,11 +1,7 @@
 import re
-import sys
 import logging
-import string
-from urllib.request import urlopen
 import unidecode
 
-import spacy
 from bs4 import BeautifulSoup
 from nltk import sent_tokenize
 from nltk import word_tokenize
@@ -18,6 +14,7 @@ NODE_REGEX = re.compile(
     r'(diff-deletedline)|(diff-addedline)|(diff-empty)')
 DIV_REGEX = re.compile(r'<div.*?>(.*)</div>', re.DOTALL)
 
+EMPTY_DIV_REGEX = re.compile(r'(diff-empty)')
 CHANGE_INLINE_REGEX = re.compile(r'(diffchange-inline)')
 DELETED_INLINE_REGEX = \
     '<del class="diffchange diffchange-inline">(.*?)</del>'
@@ -33,8 +30,7 @@ INNER_TOKEN_REGEX = re.compile(r'<EDIT-START>(.*)<EDIT-END>', re.DOTALL)
 START_TOKEN_LENGTH = len(START_TOKEN)
 END_TOKEN_LENGTH = len(END_TOKEN)
 
-# TODO: use larger model in experiments...
-nlp = spacy.load('nl_core_news_sm')
+IMAGE_SUFFIX_REGEX = r'.jpeg|.svg|.jpg|.png'
 
 # TODO: remove from nodes...
 # "De neutraliteit van dit artikel is
@@ -214,7 +210,12 @@ class Sentence():
             'revision_url': self.get_wikipedia_url()
         }
 
-# TODO: create AnnotatedText object...
+
+def contains_image_reference(text):
+    response = False
+    if re.search(IMAGE_SUFFIX_REGEX, text):
+        response = True
+    return response
 
 
 def convert_annotated_text_to_corpus(
@@ -233,6 +234,10 @@ def convert_annotated_text_to_corpus(
             # TODO: consider adding as unbiased...
             continue
 
+        if contains_image_reference(text=sentence):
+            # Ignore images
+            continue
+
         sentence_object = \
             Sentence(
                 annotated_text=sentence,
@@ -243,6 +248,13 @@ def convert_annotated_text_to_corpus(
         examples.append(example)
 
     return examples
+
+
+def is_empty_div(node):
+    return re.match(
+        EMPTY_DIV_REGEX,
+        node.div.prettify(formatter=None)
+    )
 
 
 def replace_span_tag_with_split_tokens(annotated_text, is_revision=False):
@@ -259,6 +271,36 @@ def replace_span_tag_with_split_tokens(annotated_text, is_revision=False):
         .replace(
             outer_tag,
             f'{END_TOKEN}{SPLIT_TOKEN}')
+
+
+def extract_example_from_node(node,
+                              regex,
+                              revision_id,
+                              is_revision):
+    # TODO: change to match rather...
+    prior_deleted_spans_list = \
+        extract_spans(
+            node=node,
+            regex=regex)
+
+    if not prior_deleted_spans_list:
+        # Nothing to extract
+        return {}
+
+    div = parse_div_from_node(node=node)
+
+    annotated_div = \
+        replace_span_tag_with_split_tokens(
+            annotated_text=div,
+            is_revision=is_revision)
+
+    examples = \
+        convert_annotated_text_to_corpus(
+            annotated_div,
+            revision_id=revision_id,
+            is_revision=is_revision)
+
+    return examples
 
 
 def extract_examples(html_content, revision_id):
@@ -283,70 +325,38 @@ def extract_examples(html_content, revision_id):
 
         if prior_node.div:
 
-            EMPTY_DIV_REGEX = re.compile(r'(diff-empty)')
-            is_empty_div = re.match(
-                EMPTY_DIV_REGEX,
-                prior_node.div.prettify(formatter=None))
-
-            if is_empty_div:
+            if is_empty_div(node=prior_node):
                 print('Ignoring: empty prior div')
                 continue
 
-            # TODO: change to match rather...
-            prior_deleted_spans_list = extract_spans(
-                node=prior_node,
-                regex=DELETED_INLINE_REGEX)
+            examples = \
+                extract_example_from_node(
+                    node=prior_node,
+                    regex=DELETED_INLINE_REGEX,
+                    revision_id=revision_id,
+                    is_revision=False)
 
-            if prior_deleted_spans_list:
-
-                prior_div = parse_div_from_node(node=prior_node)
-
-                annotated_prior_div = \
-                    replace_span_tag_with_split_tokens(
-                        annotated_text=prior_div, is_revision=False)
-
-                examples = \
-                    convert_annotated_text_to_corpus(
-                        annotated_prior_div,
-                        revision_id=revision_id,
-                        is_revision=False)
-
+            if examples:
                 corpus.extend(examples)
 
         if post_node.div:
 
-            EMPTY_DIV_REGEX = re.compile(r'(diff-empty)')
-            is_empty_div = re.match(
-                EMPTY_DIV_REGEX,
-                post_node.div.prettify(formatter=None))
-
-            if is_empty_div:
+            if is_empty_div(node=post_node):
                 print('Ignoring: empty post div')
                 continue
 
-            post_added_spans_list = extract_spans(
-                node=post_node,
-                regex=ADDED_INLINE_REGEX)
+            examples = \
+                extract_example_from_node(
+                    node=post_node,
+                    regex=ADDED_INLINE_REGEX,
+                    revision_id=revision_id,
+                    is_revision=True)
 
-            if post_added_spans_list:
-
-                post_div = parse_div_from_node(node=post_node)
-
-                annotated_post_div = \
-                    replace_span_tag_with_split_tokens(
-                        annotated_text=post_div,
-                        is_revision=True)
-
-                examples = \
-                    convert_annotated_text_to_corpus(
-                        annotated_post_div,
-                        revision_id=revision_id,
-                        is_revision=True)
-
+            if examples:
                 corpus.extend(examples)
 
-        if prior_deleted_spans_list and not prior_deleted_spans_list:
-            # TODO: match for only deleted words...
+        if post_added_spans_list and not prior_deleted_spans_list:
+            # TODO: add matching sentence for only deleted words...
             # Prior has words deleted and no words added in post
             # Find most similar sentence to edited sentence in prior
             pass
@@ -372,7 +382,6 @@ def apply_example_extraction(row):
     html_content = row['html_content']
 
     revision_wiki_url = f'https://nl.wikipedia.org/wiki/?diff={revision_id}'
-
     logging.info(f'Processing revision_id={revision_id} : {revision_wiki_url}')
 
     corpus = extract_examples(
