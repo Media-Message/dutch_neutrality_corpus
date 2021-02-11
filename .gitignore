@@ -148,3 +148,4 @@ bert*
 
 # Mac
 .DS_Store
+data/*

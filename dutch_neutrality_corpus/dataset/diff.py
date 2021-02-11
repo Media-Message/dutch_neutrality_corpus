@@ -104,6 +104,7 @@ class Span():
         self.text = self.convert_annotated_text_to_text(annotated_terms)
         self.tokens = self.convert_text_to_tokens(self.text)
         self.label_mask = self.get_label_mask(self.tokens)
+        self.class_labels = self.get_class_labels(self.label_mask)
 
     def convert_annotated_text_to_text(self, annotated_terms):
         # text = annotated_terms.strip()
@@ -113,6 +114,13 @@ class Span():
             .replace('\n', '')
         text = html_sanitization(text)
         return text
+
+    def get_class_labels(self, label_mask):
+        class_map = {
+            0: 'NEUT',
+            1: 'SUBJ'
+        }
+        return [class_map[label] for label in label_mask]
 
     def convert_text_to_tokens(self, text):
         return word_tokenize(text)
@@ -149,6 +157,9 @@ class Sentence():
 
     def get_label_masks(self):
         return [m for span in self.spans for m in span.label_mask]
+
+    def get_class_labels(self):
+        return [c for span in self.spans for c in span.class_labels]
 
     def get_wikipedia_url(self):
         return get_wikipedia_revision_url(self.revision_id)
@@ -203,7 +214,8 @@ class Sentence():
             'label_masks': self.get_label_masks(),
             'is_revision': self.is_revision,
             'revision_id':  self.revision_id,
-            'revision_url': self.get_wikipedia_url()
+            'revision_url': self.get_wikipedia_url(),
+            'class_labels': self.get_class_labels()
         }
 
 
