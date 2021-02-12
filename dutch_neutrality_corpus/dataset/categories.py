@@ -18,6 +18,9 @@ PARTIAL_CATEGORIES_TO_FILTER = [
     'godsdienstfilosofie'
 ]
 
+# Wars, political conflict, guidelines...
+# "neutraliteitspolitiek"
+
 
 def is_wikipedia_category(text):
     return text.startswith('Wikipedia:')

@@ -79,8 +79,9 @@ def encode_tags(tags, encodings):
         arr_offset = np.array(doc_offset)
 
         # set labels whose first offset position is 0 and the second is not 0
-        doc_enc_labels[(arr_offset[:, 0] == 0) & (
-            arr_offset[:, 1] != 0)] = doc_labels
+        doc_enc_labels[
+            (arr_offset[:, 0] == 0) & (arr_offset[:, 1] != 0)
+        ] = doc_labels
         encoded_labels.append(doc_enc_labels.tolist())
 
     return encoded_labels
