@@ -22,6 +22,10 @@ from dutch_neutrality_corpus.dataset.diff import (
     apply_example_extraction)
 from dutch_neutrality_corpus.dataset.doccano import (
     apply_conversion_to_doccano_format)
+from dutch_neutrality_corpus.dataset.split import (
+    TrainValidationTestSplitStage)
+from dutch_neutrality_corpus.dataset.align import (
+    apply_label_and_token_alignment)
 
 
 logging.basicConfig(
@@ -94,6 +98,23 @@ def main():
                 filter_collection=True,
                 flatten=True),
             SaveIterableToJSONStage(filepath=output_file)
+        ]
+
+    elif pipeline_name == 'split':
+        stages = [
+            LoadJSONFileStage(
+                filepath=input_file,
+                n_revisions=n_revisions
+            ),
+            TrainValidationTestSplitStage(
+                labels_column='labels',
+                train_set_ratio=.7,
+                validation_set_ratio=.15,
+                test_set_ratio=.15),
+            SaveIterableToJSONStage(
+                filepath=output_file,
+                from_dict=True,
+                write_as_array=False)
         ]
 
     elif pipeline_name == 'prepare_doccano':

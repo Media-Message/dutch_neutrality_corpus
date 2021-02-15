@@ -8,7 +8,7 @@ from dutch_neutrality_corpus.pipeline import (
     Stage)
 from dutch_neutrality_corpus.comment_filtering import (
     apply_npov_identification)
-from dutch_neutrality_corpus.process_text import (
+from dutch_neutrality_corpus.text import (
     apply_text_sanitation,
     apply_sentence_tokenization,
     apply_bert_tokenization

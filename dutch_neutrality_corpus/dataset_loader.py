@@ -17,7 +17,6 @@
 from __future__ import absolute_import, division, print_function
 
 import json
-import os
 
 import datasets
 
@@ -38,15 +37,18 @@ _HOMEPAGE = ""
 # TODO: Add the licence for the dataset here if you can find it
 _LICENSE = ""
 
-SAMPLE_DATASET_FILEPATH = \
-    ('/Users/nicholasmartin/Workspace/OS/'
-     'dutch_neutrality_corpus/data/'
-     'revision_texts_sample.json')
-
-FULL_DATASET_FILEPATH = \
-    ('/Users/nicholasmartin/Workspace/OS/'
-     'dutch_neutrality_corpus/data/'
-     'revision_texts_full.json')
+URLS = {
+    'sample': {
+        'train': 'https://mm-experiments.s3.eu-central-1.amazonaws.com/sample/train.json',
+        'validation': 'https://mm-experiments.s3.eu-central-1.amazonaws.com/sample/validation.json',
+        'test': 'https://mm-experiments.s3.eu-central-1.amazonaws.com/sample/test.json'
+    },
+    'full': {
+        'train': 'https://mm-experiments.s3.eu-central-1.amazonaws.com/full/train.json',
+        'validation': 'https://mm-experiments.s3.eu-central-1.amazonaws.com/full/validation.json',
+        'test': 'https://mm-experiments.s3.eu-central-1.amazonaws.com/full/test.json'
+    }
+}
 
 
 class DutchNeutralityCorpusDataset(datasets.GeneratorBasedBuilder):
@@ -90,30 +92,39 @@ class DutchNeutralityCorpusDataset(datasets.GeneratorBasedBuilder):
 
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
+        my_urls = URLS[self.config.name]
+        data_dir = dl_manager.download_and_extract(my_urls)
 
-        filepath = SAMPLE_DATASET_FILEPATH
-        if self.config.name == "full":
-            filepath = FULL_DATASET_FILEPATH
+        print('data_dir: ', data_dir)
 
         return [
             datasets.SplitGenerator(
                 name=datasets.Split.TRAIN,
                 gen_kwargs={
-                    "filepath": filepath
+                    'filepath': data_dir['train']
+                }
+            ),
+            datasets.SplitGenerator(
+                name=datasets.Split.VALIDATION,
+                gen_kwargs={
+                    'filepath': data_dir['validation']
+                }
+            ),
+            datasets.SplitGenerator(
+                name=datasets.Split.TEST,
+                gen_kwargs={
+                    'filepath': data_dir['test']
                 }
             )
         ]
 
     def _generate_examples(self, filepath):
         """ Yields examples. """
-
-        with open(filepath) as json_file:
-            collection = json.load(json_file)
-
-        for id_, row in enumerate(collection):
-
-            yield id_, {
-                'text': row['text'],
-                'tokens': row['tokens'],
-                'class_labels': row['class_labels']
-            }
+        with open(filepath, encoding="utf-8") as f:
+            for id_, row in enumerate(f):
+                row = json.loads(row)
+                yield id_, {
+                    'text': row['text'],
+                    'tokens': row['tokens'],
+                    'class_labels': row['class_labels']
+                }

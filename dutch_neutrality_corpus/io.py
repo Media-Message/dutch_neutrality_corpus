@@ -1,6 +1,8 @@
+import os
 import json
 import csv
 import logging
+import types
 import multiprocessing
 from functools import partial
 import xml.etree.cElementTree as ET
@@ -112,29 +114,45 @@ class LoadXMLFileStage(IOStage):
 
 class SaveIterableToJSONStage(IOStage):
 
-    def __init__(self, filepath, write_as_array=True):
+    def __init__(self, filepath, from_dict=False, write_as_array=True):
         super().__init__(filepath)
+        self.from_dict = from_dict
         self.write_as_array = write_as_array
 
     def log_statistics(self, collection):
         logging.info(f'Length of saved file: {len(collection)}')
 
-    def apply(self, collection):
+    def write_file(self, collection, filepath, write_as_array):
         self.log_statistics(collection)
 
-        logging.info(f'Saving {self.filepath}...')
-
-        if self.write_as_array:
-            with open(self.filepath, 'w') as outfile:
+        if write_as_array:
+            with open(filepath, 'w') as outfile:
                 json.dump(collection, outfile)
-
         else:
-            with open(self.filepath, 'w') as outfile:
+            with open(filepath, 'w') as outfile:
                 for row in collection:
                     json.dump(row, outfile)
                     outfile.write('\n')
 
-        logging.info(f'Save complete to {self.filepath}')
+        logging.info(f'Save complete to {filepath}')
+
+    def apply(self, collection):
+        logging.info(f'Saving {self.filepath}...')
+
+        # Dict of filenames and collections
+        if self.from_dict and isinstance(collection, dict):
+
+            for filename, data in collection.items():
+                full_file_path = os.path.join(self.filepath, filename)
+                self.write_file(
+                    collection=data,
+                    filepath=full_file_path,
+                    write_as_array=self.write_as_array)
+        else:
+            self.write_file(
+                collection=self.collection,
+                filepath=self.filepath,
+                write_as_array=self.write_as_array)
 
         return True
 

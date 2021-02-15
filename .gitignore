@@ -152,3 +152,5 @@ data/*
 
 dutch_neutrality_corpus/runs/*
 dutch_neutrality_corpus/dataset_loader.py.lock
+runs/*
+*.ipynb

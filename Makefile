@@ -20,6 +20,12 @@ diff:
 		--input-file data/revision_html_full.json \
 		--output-file data/revision_texts_full.json
 
+split:
+	dutch_neutrality_corpus \
+		--pipeline-name split \
+		--input-file data/revision_texts_full.json \
+		--output-file data/full/
+
 prepare_doccano:
 	dutch_neutrality_corpus \
 		--pipeline-name prepare_doccano \
@@ -39,6 +45,12 @@ diff_sample:
 		--input-file data/revision_html_sample.json \
 		--output-file data/revision_texts_sample.json \
 		--n_revisions 1000
+
+split_sample:
+	dutch_neutrality_corpus \
+		--pipeline-name split \
+		--input-file data/revision_texts_sample.json \
+		--output-file data/sample/
 
 prepare_doccano_sample:
 	dutch_neutrality_corpus \
