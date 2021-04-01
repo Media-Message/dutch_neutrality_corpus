@@ -150,7 +150,7 @@ class SaveIterableToJSONStage(IOStage):
                     write_as_array=self.write_as_array)
         else:
             self.write_file(
-                collection=self.collection,
+                collection=collection,
                 filepath=self.filepath,
                 write_as_array=self.write_as_array)
 

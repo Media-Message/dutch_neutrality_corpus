@@ -31,10 +31,8 @@ def text_sanitation(text):
     if isinstance(text, list):
         text = ' '.join(text)
 
-    x = text.lower()
-
     # ascii only
-    x = ''.join(filter(lambda x: x in string.printable, x))
+    x = ''.join(filter(lambda x: x in string.printable, text))
 
     # preemptively remove <ref>'s (including uncomplete)
     x = x.strip()
@@ -106,6 +104,9 @@ def text_sanitation(text):
 
     # Remove punctuation (except period for sentence tokenization)
     plaintext = plaintext.translate(str.maketrans('', '', PUNCTUATION))
+
+    # Only single spaces
+    plaintext = re.sub(' +', ' ', plaintext)
 
     return plaintext
 

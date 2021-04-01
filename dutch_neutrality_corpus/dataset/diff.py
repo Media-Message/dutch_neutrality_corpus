@@ -2,6 +2,7 @@ import re
 import logging
 import unidecode
 
+import spacy
 from bs4 import BeautifulSoup
 from nltk import sent_tokenize
 from nltk import word_tokenize
@@ -31,6 +32,22 @@ START_TOKEN_LENGTH = len(START_TOKEN)
 END_TOKEN_LENGTH = len(END_TOKEN)
 
 IMAGE_SUFFIX_REGEX = r'.jpeg|.svg|.jpg|.png'
+
+CLASS_MAP = {
+    0: 'O',
+    1: 'B-SUBJ'
+}
+
+# See https://universaldependencies.org/docs/u/pos/
+POS_TAGS = [
+    'DET', 'ADJ', 'NOUN', 'ADP', 'NUM', 'VERB', 'PUNCT', 'ADV',
+    'PART', 'CCONJ', 'PRON', 'X', 'INTJ', 'PROPN', 'SYM', 'AUX',
+    '<UNK>', 'SCONJ', 'SPACE'
+]
+POS_TAGS.sort()
+POS_MAP = {x: i for i, x in enumerate(POS_TAGS)}
+
+nlp = spacy.load('nl_core_news_lg')
 
 # TODO: remove from nodes...
 # "De neutraliteit van dit artikel is
@@ -113,17 +130,17 @@ class Span():
             .replace(END_TOKEN, '')\
             .replace('\n', '')
         text = html_sanitization(text)
+        text = text.strip()
+        text = re.sub(' +', ' ', text)
+
         return text
 
     def get_class_labels(self, label_mask):
-        class_map = {
-            0: 'NEUT',
-            1: 'SUBJ'
-        }
-        return [class_map[label] for label in label_mask]
+        return [CLASS_MAP[label] for label in label_mask]
 
     def convert_text_to_tokens(self, text):
-        return word_tokenize(text)
+        # return word_tokenize(text)
+        return [t.text for t in nlp(text)]
 
     def length(self):
         return len(self.text)
@@ -150,7 +167,8 @@ class Sentence():
         self.spans = self.convert_sentence_to_spans(annotated_text)
 
     def get_text(self):
-        return ' '.join([span.text for span in self.spans])
+        # return ' '.join([span.text for span in self.spans])
+        return ' '.join([' '.join(span.tokens) for span in self.spans])
 
     def get_tokens(self):
         return [t for span in self.spans for t in span.tokens]
@@ -175,6 +193,7 @@ class Sentence():
                 continue
 
             label = 0
+            # TODO: remove as redundant...
             if self.is_revision:
                 label = 0
             elif (START_TOKEN in terms) or (END_TOKEN in terms):
@@ -206,7 +225,14 @@ class Sentence():
 
         return npov_labels
 
+    def get_pos_tags(self):
+        return [t.pos_ for t in nlp(self.get_text())]
+
+    def get_pos_tag_ids(self):
+        return [POS_MAP[t.pos_] for t in nlp(self.get_text())]
+
     def create_corpus_example(self):
+
         return {
             'text': self.get_text(),
             'tokens': self.get_tokens(),
@@ -215,7 +241,9 @@ class Sentence():
             'is_revision': self.is_revision,
             'revision_id':  self.revision_id,
             'revision_url': self.get_wikipedia_url(),
-            'class_labels': self.get_class_labels()
+            'class_labels': self.get_class_labels(),
+            'pos_tags': self.get_pos_tags(),
+            'pos_tag_ids': self.get_pos_tag_ids()
         }
 
 

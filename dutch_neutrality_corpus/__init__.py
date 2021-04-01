@@ -24,9 +24,8 @@ from dutch_neutrality_corpus.dataset.doccano import (
     apply_conversion_to_doccano_format)
 from dutch_neutrality_corpus.dataset.split import (
     TrainValidationTestSplitStage)
-from dutch_neutrality_corpus.dataset.align import (
-    apply_label_and_token_alignment)
-
+from dutch_neutrality_corpus.dataset.content import (
+    apply_content_filter)
 
 logging.basicConfig(
     level='INFO',
@@ -97,6 +96,9 @@ def main():
                 func=apply_example_extraction,
                 filter_collection=True,
                 flatten=True),
+            Stage(
+                func=apply_content_filter,
+                filter_collection=True),
             SaveIterableToJSONStage(filepath=output_file)
         ]
 
